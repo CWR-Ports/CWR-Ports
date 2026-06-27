@@ -53,19 +53,19 @@ struct VirtualButtonDef {
 
 VirtualButtonDef g_mobileButtons[] = {
     {"Move", 0.15f, 0.7f, 0.12f, VB_WASD, 0},
-    {"ADS", 0.08f, 0.35f, 0.06f, VB_ADS_LOOK, 0},
+    {"ADS", 0.08f, 0.35f, 0.06f, VB_KEY, SDL_SCANCODE_V},
     {"Zoom", 0.08f, 0.15f, 0.06f, VB_ZOOM_LOOK, 0},
     {"Fire", 0.85f, 0.65f, 0.09f, VB_FIRE_LOOK, 0},
     {"Action\n(Drag)", 0.82f, 0.45f, 0.06f, VB_ACTION, 0},
     {"Reload", 0.95f, 0.35f, 0.05f, VB_KEY, SDL_SCANCODE_R},
     {"Q", 0.93f, 0.65f, 0.04f, VB_KEY, SDL_SCANCODE_Q},
-    {"Crouch", 0.95f, 0.85f, 0.05f, VB_KEY, SDL_SCANCODE_Z},
+    {"Crouch", 0.95f, 0.85f, 0.05f, VB_KEY, SDL_SCANCODE_X}, // INTEGRATE IT WITH PRONE (Z), TAP TO CROUCH, HOLD TO PRONE
     {"Time", 0.70f, 0.08f, 0.04f, VB_KEY, SDL_SCANCODE_O},
     {"Compass", 0.79f, 0.08f, 0.04f, VB_KEY, SDL_SCANCODE_K},
     {"Map", 0.88f, 0.08f, 0.04f, VB_KEY, SDL_SCANCODE_M},
     {"ESC", 0.96f, 0.08f, 0.03f, VB_KEY, SDL_SCANCODE_ESCAPE},
     {"Bino", 0.82f, 0.20f, 0.04f, VB_KEY, SDL_SCANCODE_B},
-    {"Firemode", 0.95f, 0.20f, 0.04f, VB_KEY, SDL_SCANCODE_F},
+    {"Firemode", 0.95f, 0.20f, 0.04f, VB_KEY, SDL_SCANCODE_SPACE},
 };
 extern const int g_numMobileButtons = sizeof(g_mobileButtons) / sizeof(g_mobileButtons[0]);
 
