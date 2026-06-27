@@ -34,8 +34,7 @@ extern World* ::Poseidon::GWorld;
 extern Engine* ::Poseidon::GEngine;
 
 #ifdef __ANDROID__
-enum
-{
+enum {
     VB_WASD = 1,
     VB_LOOK = 2,
     VB_FIRE_LOOK = 3,
@@ -45,35 +44,32 @@ enum
     VB_ZOOM_LOOK = 7
 };
 
-struct VirtualButtonDef
-{
+struct VirtualButtonDef {
     const char* name;
     float x, y, r;
     int type;
-    int data;
+    int data; 
 };
 
 VirtualButtonDef g_mobileButtons[] = {
     {"Move", 0.15f, 0.7f, 0.12f, VB_WASD, 0},
-    {"ADS", 0.08f, 0.35f, 0.06f, VB_KEY, SDL_SCANCODE_V},
+    {"ADS", 0.08f, 0.35f, 0.06f, VB_ADS_LOOK, 0},
     {"Zoom", 0.08f, 0.15f, 0.06f, VB_ZOOM_LOOK, 0},
     {"Fire", 0.85f, 0.65f, 0.09f, VB_FIRE_LOOK, 0},
     {"Action\n(Drag)", 0.82f, 0.45f, 0.06f, VB_ACTION, 0},
     {"Reload", 0.95f, 0.35f, 0.05f, VB_KEY, SDL_SCANCODE_R},
     {"Q", 0.93f, 0.65f, 0.04f, VB_KEY, SDL_SCANCODE_Q},
-    {"Crouch", 0.95f, 0.85f, 0.05f, VB_KEY,
-     SDL_SCANCODE_X}, // Integrate it with Prone Key which is "Z". Tap to crouch, hold to prone.
+    {"Crouch", 0.95f, 0.85f, 0.05f, VB_KEY, SDL_SCANCODE_Z},
     {"Time", 0.70f, 0.08f, 0.04f, VB_KEY, SDL_SCANCODE_O},
     {"Compass", 0.79f, 0.08f, 0.04f, VB_KEY, SDL_SCANCODE_K},
     {"Map", 0.88f, 0.08f, 0.04f, VB_KEY, SDL_SCANCODE_M},
     {"ESC", 0.96f, 0.08f, 0.03f, VB_KEY, SDL_SCANCODE_ESCAPE},
     {"Bino", 0.82f, 0.20f, 0.04f, VB_KEY, SDL_SCANCODE_B},
-    {"Firemode", 0.95f, 0.20f, 0.04f, VB_KEY, SDL_SCANCODE_SPACE},
+    {"Firemode", 0.95f, 0.20f, 0.04f, VB_KEY, SDL_SCANCODE_F},
 };
 extern const int g_numMobileButtons = sizeof(g_mobileButtons) / sizeof(g_mobileButtons[0]);
 
-struct VirtualTouchRenderState
-{
+struct VirtualTouchRenderState {
     bool active = false;
     float currX = 0, currY = 0;
 };
@@ -158,7 +154,7 @@ static void DispatchControllerUiDispatch(const ControllerUiDispatch& dispatch)
 static bool IsControllerPointerAction(ControllerUiAction action)
 {
     return action == ControllerUiAction::PrimaryDown || action == ControllerUiAction::PrimaryUp ||
-           action == ControllerUiAction::PrimaryClick;
+        action == ControllerUiAction::PrimaryClick;
 }
 
 void SDLInput_BufferUICharEvent(const char* text)
@@ -265,7 +261,7 @@ void SDLInput_SetAbsoluteCursor(float x, float y)
 {
     float cx = (x * 2.0f) - 1.0f;
     float cy = (y * 2.0f) - 1.0f;
-
+    
     if (::Poseidon::GEngine)
     {
         AspectSettings as;
@@ -281,7 +277,7 @@ void SDLInput_SetAbsoluteCursor(float x, float y)
         cx = minX + x * (maxX - minX);
         cy = minY + y * (maxY - minY);
     }
-
+    
     GInput.cursor.cursorX = cx;
     GInput.cursor.cursorY = cy;
     GInput.mouse.cursorLastActive = Glob.uiTime;
@@ -533,10 +529,10 @@ void ProcessJoystick_SDL()
     const float dzTrigger = GInput.gamepad.deadzoneTrigger;
 
     // ---- Left stick → vehicle analog axes + infantry WASD injection ----
-    float lx =
-        sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f, dzStick) : 0.0f;
-    float ly =
-        sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f, dzStick) : 0.0f;
+    float lx = sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f, dzStick)
+                        : 0.0f;
+    float ly = sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f, dzStick)
+                        : 0.0f;
     if (hasSyntheticLeftStick)
     {
         lx = syntheticLx;
@@ -551,10 +547,10 @@ void ProcessJoystick_SDL()
         GInput.gamepad.moveLastActive = Glob.uiTime;
 
     // ---- Right stick → camera look (direct cursorMoved injection) ----
-    float rx =
-        sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f, dzStick) : 0.0f;
-    float ry =
-        sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f, dzStick) : 0.0f;
+    float rx = sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f, dzStick)
+                        : 0.0f;
+    float ry = sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f, dzStick)
+                        : 0.0f;
     CircleToSquare(rx, ry);
 
     GInput.gamepad.stickAxis[3] = rx;
