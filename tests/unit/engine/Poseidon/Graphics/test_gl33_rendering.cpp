@@ -3,7 +3,11 @@
 
 #include <Poseidon/Graphics/Core/TLVertex.hpp>
 #include <Poseidon/Graphics/Core/RenderState.hpp>
+#if POSEIDON_GLES32
+#include <PoseidonGLES32/EngineGLES32.hpp>
+#else
 #include <PoseidonGL33/EngineGL33.hpp>
+#endif
 #include <Poseidon/Graphics/Core/MatrixConversion.hpp>
 
 #include <cstddef>
@@ -613,18 +617,38 @@ TEST_CASE("VSConst: register indices are non-overlapping", "[Graphics][GL33]")
     REQUIRE(VSConst::SlotVpScale > VSConst::SlotProj + 3);
 }
 
-// TextureGL33 System Tests
-// Tests for the GL33 texture subsystem (format mapping, mipmap sizes, struct layout)
+// Texture System Tests
+// Tests for the texture subsystem (format mapping, mipmap sizes, struct layout)
 
+#if POSEIDON_GLES32
+#include <PoseidonGLES32/TextureGLES32.hpp>
+#include <PoseidonGLES32/GLESCompat.hpp>
+
+extern int MipmapSizeGLES32(PacFormat format, int w, int h);
+extern void InitGLESPixelFormat(TextureDescGLES32& desc, PacFormat format, bool enableDXT);
+
+using TextureDesc_T = TextureDescGLES32;
+using SurfaceInfo_T = SurfaceInfoGLES32;
+
+inline int MipmapSize_T(PacFormat f, int w, int h) { return MipmapSizeGLES32(f, w, h); }
+inline void InitPixelFormat_T(TextureDesc_T& d, PacFormat f, bool e) { InitGLESPixelFormat(d, f, e); }
+#else
 #include <PoseidonGL33/TextureGL33.hpp>
 #include <glad/gl.h>
 
 extern int MipmapSizeGL33(PacFormat format, int w, int h);
 extern void InitGLPixelFormat(TextureDescGL33& desc, PacFormat format, bool enableDXT);
 
+using TextureDesc_T = TextureDescGL33;
+using SurfaceInfo_T = SurfaceInfoGL33;
+
+inline int MipmapSize_T(PacFormat f, int w, int h) { return MipmapSizeGL33(f, w, h); }
+inline void InitPixelFormat_T(TextureDesc_T& d, PacFormat f, bool e) { InitGLPixelFormat(d, f, e); }
+#endif
+
 TEST_CASE("TextureDescGL33: struct has expected fields", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
+    TextureDesc_T desc{};
     desc.w = 256;
     desc.h = 128;
     desc.nMipmaps = 5;
@@ -641,111 +665,111 @@ TEST_CASE("TextureDescGL33: struct has expected fields", "[Graphics][GL33][Textu
 
 TEST_CASE("SurfaceInfoGL33: default texture is zero", "[Graphics][GL33][Texture]")
 {
-    SurfaceInfoGL33 surface{};
+    SurfaceInfo_T surface{};
     REQUIRE(surface.GetTexture() == 0);
 }
 
-TEST_CASE("SurfaceInfoGL33::CalculateSize: RGBA8888 single level", "[Graphics][GL33][Texture]")
+TEST_CASE("SurfaceInfo_T::CalculateSize: RGBA8888 single level", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
+    TextureDesc_T desc{};
     desc.w = 64;
     desc.h = 64;
     desc.nMipmaps = 1;
 
-    int size = SurfaceInfoGL33::CalculateSize(desc, PacARGB8888);
+    int size = SurfaceInfo_T::CalculateSize(desc, PacARGB8888);
     REQUIRE(size == 64 * 64 * 4); // 16384 bytes
 }
 
-TEST_CASE("SurfaceInfoGL33::CalculateSize: RGBA8888 with mipmaps", "[Graphics][GL33][Texture]")
+TEST_CASE("SurfaceInfo_T::CalculateSize: RGBA8888 with mipmaps", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
+    TextureDesc_T desc{};
     desc.w = 64;
     desc.h = 64;
     desc.nMipmaps = 3; // 64x64 + 32x32 + 16x16
 
-    int size = SurfaceInfoGL33::CalculateSize(desc, PacARGB8888);
+    int size = SurfaceInfo_T::CalculateSize(desc, PacARGB8888);
     int expected = 64 * 64 * 4 + 32 * 32 * 4 + 16 * 16 * 4; // 16384 + 4096 + 1024 = 21504
     REQUIRE(size == expected);
 }
 
-TEST_CASE("SurfaceInfoGL33::CalculateSize: 16-bit format", "[Graphics][GL33][Texture]")
+TEST_CASE("SurfaceInfo_T::CalculateSize: 16-bit format", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
+    TextureDesc_T desc{};
     desc.w = 128;
     desc.h = 128;
     desc.nMipmaps = 1;
 
-    int size = SurfaceInfoGL33::CalculateSize(desc, PacARGB1555);
+    int size = SurfaceInfo_T::CalculateSize(desc, PacARGB1555);
     REQUIRE(size == 128 * 128 * 2); // 32768 bytes
 }
 
-TEST_CASE("SurfaceInfoGL33::CalculateSize: DXT1 compressed", "[Graphics][GL33][Texture]")
+TEST_CASE("SurfaceInfo_T::CalculateSize: DXT1 compressed", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
+    TextureDesc_T desc{};
     desc.w = 64;
     desc.h = 64;
     desc.nMipmaps = 1;
 
-    int size = SurfaceInfoGL33::CalculateSize(desc, PacDXT1);
+    int size = SurfaceInfo_T::CalculateSize(desc, PacDXT1);
     // DXT1: ((64+3)/4) * ((64+3)/4) * 8 = 16 * 16 * 8 = 2048
     REQUIRE(size == 2048);
 }
 
-TEST_CASE("SurfaceInfoGL33::CalculateSize: DXT5 compressed", "[Graphics][GL33][Texture]")
+TEST_CASE("SurfaceInfo_T::CalculateSize: DXT5 compressed", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
+    TextureDesc_T desc{};
     desc.w = 64;
     desc.h = 64;
     desc.nMipmaps = 1;
 
-    int size = SurfaceInfoGL33::CalculateSize(desc, PacDXT5);
+    int size = SurfaceInfo_T::CalculateSize(desc, PacDXT5);
     // DXT5: ((64+3)/4) * ((64+3)/4) * 16 = 16 * 16 * 16 = 4096
     REQUIRE(size == 4096);
 }
 
-TEST_CASE("SurfaceInfoGL33::CalculateSize: explicit totalSize overrides calculation", "[Graphics][GL33][Texture]")
+TEST_CASE("SurfaceInfo_T::CalculateSize: explicit totalSize overrides calculation", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
+    TextureDesc_T desc{};
     desc.w = 64;
     desc.h = 64;
     desc.nMipmaps = 1;
 
     // When totalSize >= 0, it should return that value directly
-    int size = SurfaceInfoGL33::CalculateSize(desc, PacARGB8888, 42);
+    int size = SurfaceInfo_T::CalculateSize(desc, PacARGB8888, 42);
     REQUIRE(size == 42);
 }
 
-TEST_CASE("MipmapSizeGL33: various formats", "[Graphics][GL33][Texture]")
+TEST_CASE("MipmapSize_T: various formats", "[Graphics][GL33][Texture]")
 {
     // 32-bit: w * h * 4
-    REQUIRE(MipmapSizeGL33(PacARGB8888, 16, 16) == 16 * 16 * 4);
+    REQUIRE(MipmapSize_T(PacARGB8888, 16, 16) == 16 * 16 * 4);
 
     // 16-bit: w * h * 2
-    REQUIRE(MipmapSizeGL33(PacARGB1555, 32, 32) == 32 * 32 * 2);
-    REQUIRE(MipmapSizeGL33(PacRGB565, 64, 64) == 64 * 64 * 2);
-    REQUIRE(MipmapSizeGL33(PacARGB4444, 128, 128) == 128 * 128 * 2);
+    REQUIRE(MipmapSize_T(PacARGB1555, 32, 32) == 32 * 32 * 2);
+    REQUIRE(MipmapSize_T(PacRGB565, 64, 64) == 64 * 64 * 2);
+    REQUIRE(MipmapSize_T(PacARGB4444, 128, 128) == 128 * 128 * 2);
 
     // DXT1: block-based, 8 bytes per 4x4 block
-    REQUIRE(MipmapSizeGL33(PacDXT1, 16, 16) == 4 * 4 * 8);
+    REQUIRE(MipmapSize_T(PacDXT1, 16, 16) == 4 * 4 * 8);
 
     // DXT5: block-based, 16 bytes per 4x4 block
-    REQUIRE(MipmapSizeGL33(PacDXT5, 16, 16) == 4 * 4 * 16);
+    REQUIRE(MipmapSize_T(PacDXT5, 16, 16) == 4 * 4 * 16);
 }
 
-TEST_CASE("MipmapSizeGL33: non-power-of-two sizes", "[Graphics][GL33][Texture]")
+TEST_CASE("MipmapSize_T: non-power-of-two sizes", "[Graphics][GL33][Texture]")
 {
     // DXT with non-multiple-of-4: rounds up
     // 5x5 → ((5+3)/4) * ((5+3)/4) * 8 = 2 * 2 * 8 = 32
-    REQUIRE(MipmapSizeGL33(PacDXT1, 5, 5) == 32);
+    REQUIRE(MipmapSize_T(PacDXT1, 5, 5) == 32);
 
     // 1x1 DXT1 → ((1+3)/4) * ((1+3)/4) * 8 = 1 * 1 * 8 = 8
-    REQUIRE(MipmapSizeGL33(PacDXT1, 1, 1) == 8);
+    REQUIRE(MipmapSize_T(PacDXT1, 1, 1) == 8);
 }
 
 TEST_CASE("InitGLPixelFormat: ARGB8888 maps to GL_RGBA8", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
-    InitGLPixelFormat(desc, PacARGB8888, true);
+    TextureDesc_T desc{};
+    InitPixelFormat_T(desc, PacARGB8888, true);
 
     REQUIRE(desc.internalFormat == GL_RGBA8);
     REQUIRE(desc.pixelFormat == GL_BGRA);
@@ -755,8 +779,8 @@ TEST_CASE("InitGLPixelFormat: ARGB8888 maps to GL_RGBA8", "[Graphics][GL33][Text
 
 TEST_CASE("InitGLPixelFormat: ARGB1555 maps to GL_RGB5_A1", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
-    InitGLPixelFormat(desc, PacARGB1555, true);
+    TextureDesc_T desc{};
+    InitPixelFormat_T(desc, PacARGB1555, true);
 
     REQUIRE(desc.internalFormat == GL_RGB5_A1);
     REQUIRE(desc.pixelFormat == GL_BGRA);
@@ -766,8 +790,8 @@ TEST_CASE("InitGLPixelFormat: ARGB1555 maps to GL_RGB5_A1", "[Graphics][GL33][Te
 
 TEST_CASE("InitGLPixelFormat: RGB565 maps to GL_RGB565", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
-    InitGLPixelFormat(desc, PacRGB565, true);
+    TextureDesc_T desc{};
+    InitPixelFormat_T(desc, PacRGB565, true);
 
     REQUIRE(desc.internalFormat == GL_RGB565);
     REQUIRE(desc.pixelFormat == GL_RGB);
@@ -777,8 +801,8 @@ TEST_CASE("InitGLPixelFormat: RGB565 maps to GL_RGB565", "[Graphics][GL33][Textu
 
 TEST_CASE("InitGLPixelFormat: ARGB4444 maps to GL_RGBA4", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
-    InitGLPixelFormat(desc, PacARGB4444, true);
+    TextureDesc_T desc{};
+    InitPixelFormat_T(desc, PacARGB4444, true);
 
     REQUIRE(desc.internalFormat == GL_RGBA4);
     REQUIRE(desc.pixelFormat == GL_BGRA);
@@ -788,8 +812,8 @@ TEST_CASE("InitGLPixelFormat: ARGB4444 maps to GL_RGBA4", "[Graphics][GL33][Text
 
 TEST_CASE("InitGLPixelFormat: AI88 maps to GL_RG8", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
-    InitGLPixelFormat(desc, PacAI88, true);
+    TextureDesc_T desc{};
+    InitPixelFormat_T(desc, PacAI88, true);
 
     REQUIRE(desc.internalFormat == GL_RG8);
     REQUIRE(desc.pixelFormat == GL_RG);
@@ -799,8 +823,8 @@ TEST_CASE("InitGLPixelFormat: AI88 maps to GL_RG8", "[Graphics][GL33][Texture]")
 
 TEST_CASE("InitGLPixelFormat: DXT1 maps to compressed S3TC", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
-    InitGLPixelFormat(desc, PacDXT1, true);
+    TextureDesc_T desc{};
+    InitPixelFormat_T(desc, PacDXT1, true);
 
     REQUIRE(desc.internalFormat == GL_COMPRESSED_RGBA_S3TC_DXT1_EXT);
     REQUIRE(desc.compressed == true);
@@ -808,8 +832,8 @@ TEST_CASE("InitGLPixelFormat: DXT1 maps to compressed S3TC", "[Graphics][GL33][T
 
 TEST_CASE("InitGLPixelFormat: DXT3 maps to compressed S3TC", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
-    InitGLPixelFormat(desc, PacDXT3, true);
+    TextureDesc_T desc{};
+    InitPixelFormat_T(desc, PacDXT3, true);
 
     REQUIRE(desc.internalFormat == GL_COMPRESSED_RGBA_S3TC_DXT3_EXT);
     REQUIRE(desc.compressed == true);
@@ -817,8 +841,8 @@ TEST_CASE("InitGLPixelFormat: DXT3 maps to compressed S3TC", "[Graphics][GL33][T
 
 TEST_CASE("InitGLPixelFormat: DXT5 maps to compressed S3TC", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
-    InitGLPixelFormat(desc, PacDXT5, true);
+    TextureDesc_T desc{};
+    InitPixelFormat_T(desc, PacDXT5, true);
 
     REQUIRE(desc.internalFormat == GL_COMPRESSED_RGBA_S3TC_DXT5_EXT);
     REQUIRE(desc.compressed == true);
@@ -827,31 +851,31 @@ TEST_CASE("InitGLPixelFormat: DXT5 maps to compressed S3TC", "[Graphics][GL33][T
 TEST_CASE("TextureGL33: GetHandle returns 0 when no surfaces", "[Graphics][GL33][Texture]")
 {
     // TextureGL33 uses FAST_ALLOCATOR — test via GetHandle on a zeroed surface
-    SurfaceInfoGL33 surf{};
+    SurfaceInfo_T surf{};
     REQUIRE(surf.GetTexture() == 0);
 }
 
-TEST_CASE("SurfaceInfoGL33::CalculateSize: mipmap chain halving", "[Graphics][GL33][Texture]")
+TEST_CASE("SurfaceInfo_T::CalculateSize: mipmap chain halving", "[Graphics][GL33][Texture]")
 {
     // 256x256, 4 mips: 256x256 + 128x128 + 64x64 + 32x32 (16-bit)
-    TextureDescGL33 desc{};
+    TextureDesc_T desc{};
     desc.w = 256;
     desc.h = 256;
     desc.nMipmaps = 4;
 
-    int size = SurfaceInfoGL33::CalculateSize(desc, PacARGB1555);
+    int size = SurfaceInfo_T::CalculateSize(desc, PacARGB1555);
     int expected = (256 * 256 + 128 * 128 + 64 * 64 + 32 * 32) * 2;
     REQUIRE(size == expected);
 }
 
-TEST_CASE("SurfaceInfoGL33::CalculateSize: non-square texture", "[Graphics][GL33][Texture]")
+TEST_CASE("SurfaceInfo_T::CalculateSize: non-square texture", "[Graphics][GL33][Texture]")
 {
-    TextureDescGL33 desc{};
+    TextureDesc_T desc{};
     desc.w = 128;
     desc.h = 64;
     desc.nMipmaps = 2; // 128x64 + 64x32
 
-    int size = SurfaceInfoGL33::CalculateSize(desc, PacARGB8888);
+    int size = SurfaceInfo_T::CalculateSize(desc, PacARGB8888);
     int expected = 128 * 64 * 4 + 64 * 32 * 4; // 32768 + 8192 = 40960
     REQUIRE(size == expected);
 }
