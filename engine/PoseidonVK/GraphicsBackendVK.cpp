@@ -1,3 +1,8 @@
+/*
+ * PoseidonVK Graphics Backend Registration
+ * Registers the Vulkan graphics backend factory with the engine
+ */
+
 #include <Poseidon/Graphics/GraphicsEngineFactory.hpp>
 #include <Poseidon/Graphics/Core/EngineFactory.hpp>
 #include <Poseidon/Graphics/Shared/WindowMetrics.hpp>

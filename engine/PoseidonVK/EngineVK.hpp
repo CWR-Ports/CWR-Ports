@@ -1,3 +1,7 @@
+/*
+ * PoseidonVK Vulkan rendering engine bootstrap interface
+ */
+
 #ifdef _MSC_VER
 #pragma once
 #endif
@@ -26,6 +30,27 @@ class EngineVK;
 // entry-point creator for GraphicsEngineFactory
 Engine* CreateEngineVK(int width, int height, bool windowed, int bpp);
 
+enum VertexShaderID
+{
+    VSScreen,
+    VSTransform,
+    VSShadow,
+    NVertexShaders,
+    VSNone = NVertexShaders
+};
+
+enum PixelShaderID
+{
+    PSNormal,
+    PSDetail,
+    PSGrass,
+    PSWater,
+    PSFlat,
+    PSShadow,
+    NPixelShaders,
+    PSNone = NPixelShaders
+};
+
 class EngineVK : public Engine
 {
     typedef Engine base;
@@ -51,6 +76,9 @@ protected:
     VkRenderPass _renderPass = VK_NULL_HANDLE;
     VkCommandPool _commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> _commandBuffers;
+
+    VkShaderModule _vsModules[NVertexShaders] = { VK_NULL_HANDLE };
+    VkShaderModule _fsModules[NPixelShaders] = { VK_NULL_HANDLE };
 
     int _bias = 0;
     float _gamma = 1.0f;
@@ -165,6 +193,10 @@ public:
 
     /// optional overrides ///
     void EmitDraw(const render::frame::Draw& d) override;
+
+private:
+    void InitShaders();
+    void DeinitShaders();
 };
 }
 

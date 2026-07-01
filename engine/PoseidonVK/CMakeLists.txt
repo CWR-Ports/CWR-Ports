@@ -51,11 +51,13 @@ else()
     )
 endif()
 
+find_package(glslang CONFIG REQUIRED)
+
 if(ANDROID)
-    target_link_libraries(PoseidonVK PUBLIC vulkan)
+    target_link_libraries(PoseidonVK PUBLIC vulkan PRIVATE glslang::glslang glslang::glslang-default-resource-limits glslang::SPIRV)
 else()
     find_package(Vulkan REQUIRED)
-    target_link_libraries(PoseidonVK PUBLIC Vulkan::Vulkan)
+    target_link_libraries(PoseidonVK PUBLIC Vulkan::Vulkan PRIVATE glslang::glslang glslang::glslang-default-resource-limits glslang::SPIRV)
 endif()
 
 set_target_properties(PoseidonVK PROPERTIES

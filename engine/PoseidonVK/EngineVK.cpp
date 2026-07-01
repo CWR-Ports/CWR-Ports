@@ -1,16 +1,20 @@
-// this file acts as the bootstrap phase for poseidonvk, the vulkan renderer backend.
+/*
+ * PoseidonVK Vulkan rendering engine bootstrap implementation
+ */
+
+// this file acts as the bootstrap phase for poseidonvk the vulkan renderer backend
 //
-// we are shifting to vulkan on android to bypass the overhead, driver bugs,
-// and lack of modern extensions in the latest adreno and mali opengl es drivers.
-// this port will allow us to manage memory pools directly (using vma), handle
-// staging ring buffers for dynamic geometry without cpu stalls, and avoid complex
-// driver fallback paths like manual bcdec transcoding for s3tc/dxt formats.
+// we are shifting to vulkan on android to bypass the overhead driver bugs
+// and lack of modern extensions in the latest adreno and mali opengl es drivers
+// this port will allow us to manage memory pools directly using vma handle
+// staging ring buffers for dynamic geometry without cpu stalls and avoid complex
+// driver fallback paths like manual bcdec transcoding for s3tc and dxt formats
 //
-// this skeleton handles factory registration, building, and target linking
-// before we start implementing the vulkan pipelines, descriptor sets, swapchains,
-// and render passes.
+// this skeleton handles factory registration building and target linking
+// before we start implementing the vulkan pipelines descriptor sets swapchains
+// and render passes
 //
-// I DO NOT YET KNOW IF THIS WILL BE FEASIBLE AT ALL, BUT LET'S SEE!
+// I DO NOT YET KNOW IF THIS WILL BE FEASIBLE AT ALL BUT LETS SEE
 
 #include <PoseidonVK/EngineVK.hpp>
 #include <Poseidon/Core/Application.hpp>
@@ -37,11 +41,15 @@ EngineVK::EngineVK(int width, int height, bool windowed, int bpp)
     _maxGuardY = _h;
 
     LOG_INFO(Graphics, "PoseidonVK: Initializing stub Vulkan engine ({}x{} {}bpp)", _w, _h, _pixelSize);
+    
+    InitShaders();
 }
 
 EngineVK::~EngineVK()
 {
     LOG_INFO(Graphics, "PoseidonVK: Destroying Vulkan engine");
+    
+    DeinitShaders();
 }
 
 bool EngineVK::InitDrawDone()
