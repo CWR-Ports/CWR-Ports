@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(GLAD_GLES2)
 #include <glad/gles2.h>
 #else
 #include <glad/gl.h>
@@ -48,7 +48,7 @@ inline void* MapDynamicWriteInvalidate(GLenum target, GLintptr offset, GLsizeipt
 
 inline void* MapStaticWriteOnce(GLenum target, GLsizeiptr length)
 {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(GLAD_GLES2)
     return glMapBufferRange(target, 0, length, GL_MAP_WRITE_BIT);
 #else
     (void)length;

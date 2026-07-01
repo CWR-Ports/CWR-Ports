@@ -23,7 +23,7 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_opengl3.h>
 #include <SDL3/SDL.h>
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(GLAD_GLES2)
 #include <glad/gles2.h>
 #else
 #include <glad/gl.h>

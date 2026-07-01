@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(GLAD_GLES2)
 #include <glad/gles2.h>
 #else
 #include <glad/gl.h>
@@ -75,13 +75,13 @@ inline void EnableDepthTest()
 }
 inline void DisableDepthClamp()
 {
-#ifndef __ANDROID__
+#if !defined(__ANDROID__) && !defined(GLAD_GLES2)
     glDisable(GL_DEPTH_CLAMP);
 #endif
 }
 inline void EnableDepthClamp()
 {
-#ifndef __ANDROID__
+#if !defined(__ANDROID__) && !defined(GLAD_GLES2)
     glEnable(GL_DEPTH_CLAMP);
 #endif
 }

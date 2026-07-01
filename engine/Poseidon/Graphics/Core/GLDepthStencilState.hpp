@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(GLAD_GLES2)
 #include <glad/gles2.h>
 #else
 #include <glad/gl.h>
