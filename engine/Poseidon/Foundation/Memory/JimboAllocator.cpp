@@ -40,7 +40,7 @@ JimboAllocator::JimboAllocator() : _heap(nullptr), _allocCount(0), _outOfMemory(
     // IMPORTANT: mi_heap_new() creates a thread-specific heap that cannot be
     // shared across threads. The default heap internally uses thread-local
     // heaps and is safe for multi-threaded use.
-    _heap = mi_theap_get_default();
+    _heap = mi_heap_get_default();
 }
 
 JimboAllocator::~JimboAllocator()
@@ -159,7 +159,7 @@ bool JimboAllocator::IsOutOfMemory()
 void JimboAllocator::CleanUp()
 {
     // Collect any cached memory that mimalloc is holding
-    mi_theap_collect(_heap, true);
+    mi_heap_collect(_heap, true);
 }
 
 void JimboAllocator::RegisterFreeOnDemand(IMemoryFreeOnDemand* object)

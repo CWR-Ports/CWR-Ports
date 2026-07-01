@@ -108,19 +108,27 @@ class WeightInfo: public RefCount
 };
 
 
-template<>
-struct BankTraits<WeightInfo>
+} // namespace Poseidon
+
+namespace Poseidon::Foundation
 {
-	typedef const WeightInfoName &NameType;
-	static int CompareNames( const WeightInfoName &n1, const WeightInfoName &n2 )
+	template<>
+	struct BankTraits<Poseidon::WeightInfo>
 	{
-		int d = (char *)n1.shape.GetTypeRef()-(char *)n2.shape.GetTypeRef();
-		if (d) return d;
-		d = (char *)n1.skeleton.GetTypeRef()-(char *)n2.skeleton.GetTypeRef();
-		return d;
-	}
-	typedef RefArray<WeightInfo> ContainerType;
-};
+		typedef const Poseidon::WeightInfoName &NameType;
+		static int CompareNames( const Poseidon::WeightInfoName &n1, const Poseidon::WeightInfoName &n2 )
+		{
+			int d = (char *)n1.shape.GetTypeRef()-(char *)n2.shape.GetTypeRef();
+			if (d) return d;
+			d = (char *)n1.skeleton.GetTypeRef()-(char *)n2.skeleton.GetTypeRef();
+			return d;
+		}
+		typedef RefArray<Poseidon::WeightInfo> ContainerType;
+	};
+}
+
+namespace Poseidon
+{
 
 class Skeleton: public RefCountWithLinks
 {
@@ -140,16 +148,24 @@ class Skeleton: public RefCountWithLinks
 	void Prepare(LODShape *lShape, WeightInfo &weights);
 };
 
-template<>
-struct BankTraits<Skeleton>
+} // namespace Poseidon
+
+namespace Poseidon::Foundation
 {
-	typedef const RStringB &NameType;
-	static int CompareNames( NameType n1, NameType n2 )
+	template<>
+	struct BankTraits<Poseidon::Skeleton>
 	{
-		return n1!=n2;
-	}
-	typedef RefArray<Skeleton> ContainerType;
-};
+		typedef const Poseidon::Foundation::RStringB &NameType;
+		static int CompareNames( NameType n1, NameType n2 )
+		{
+			return n1!=n2;
+		}
+		typedef RefArray<Poseidon::Skeleton> ContainerType;
+	};
+}
+
+namespace Poseidon
+{
 
 extern BankArray<Skeleton> Skeletons;
 

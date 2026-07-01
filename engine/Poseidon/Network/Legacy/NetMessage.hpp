@@ -186,15 +186,17 @@ class NetMessage : public Poseidon::Foundation::RefCountSafe
 extern unsigned netMessageToUnsigned(RefD<NetMessage>& msg);
 
 extern unsigned netMessageAddressToUnsigned(RefD<NetMessage>& msg);
-
-template <>
-struct ImplicitMapTraits<RefD<NetMessage>>
+namespace Poseidon::Foundation
 {
-    static RefD<NetMessage> zombie;
-    static RefD<NetMessage> null;
-};
+	template <>
+	struct ImplicitMapTraits<RefD<::NetMessage>>
+	{
+		static RefD<::NetMessage> zombie;
+		static RefD<::NetMessage> null;
+	};
+}
 
-namespace Poseidon::Foundation { template class ImplicitMap<unsigned, RefD<NetMessage>, netMessageToUnsigned, true, Poseidon::Foundation::MemAllocSafe>; } // namespace Poseidon::Foundation
+namespace Poseidon::Foundation { template class ImplicitMap<unsigned, RefD<::NetMessage>, ::netMessageToUnsigned, true, Poseidon::Foundation::MemAllocSafe>; } // namespace Poseidon::Foundation
 
 #ifdef SAFE_HEAP_STAT
 

@@ -1414,13 +1414,21 @@ struct EncryptorInformation
     IFilebankEncryption* (*createFunction)(const void* context);
 };
 
-template <>
-struct FindArrayKeyTraits<EncryptorInformation>
+} // namespace Poseidon
+
+namespace Poseidon::Foundation
 {
-    typedef const char* KeyType;
-    static bool IsEqual(const char* a, const char* b) { return !strcmpi(a, b); }
-    static const char* GetKey(const EncryptorInformation& a) { return a.name; }
-};
+	template <>
+	struct FindArrayKeyTraits<Poseidon::EncryptorInformation>
+	{
+		typedef const char* KeyType;
+		static bool IsEqual(const char* a, const char* b) { return !strcmpi(a, b); }
+		static const char* GetKey(const Poseidon::EncryptorInformation& a) { return a.name; }
+	};
+}
+
+namespace Poseidon
+{
 
 // Global encryption registry
 #pragma clang diagnostic push

@@ -96,19 +96,26 @@ struct FileRequest
 	bool Contains(const FileRequest &with) const;
 };
 
+} // namespace Poseidon
 
-template <>
-struct HeapTraits<FileRequest>
+namespace Poseidon::Foundation
 {
-	static bool IsLess(const FileRequest &a, const FileRequest &b)
+	template <>
+	struct HeapTraits<Poseidon::FileRequest>
 	{
-		return a._timeNeeded < b._timeNeeded;
-	}
-	static bool IsLessOrEqual(const FileRequest &a, const FileRequest &b)
-	{
-		return a._timeNeeded <= b._timeNeeded;
-	}
-};
+		static bool IsLess(const Poseidon::FileRequest &a, const Poseidon::FileRequest &b)
+		{
+			return a._timeNeeded < b._timeNeeded;
+		}
+		static bool IsLessOrEqual(const Poseidon::FileRequest &a, const Poseidon::FileRequest &b)
+		{
+			return a._timeNeeded <= b._timeNeeded;
+		}
+	};
+}
+
+namespace Poseidon
+{
 
 class FileServerST: public FileServer
 {

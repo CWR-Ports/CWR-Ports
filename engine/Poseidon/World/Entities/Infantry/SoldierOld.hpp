@@ -76,19 +76,26 @@ class ActionVehMap
 	int GetMaxAction() const {return _actionMoves.Size();}
 	MoveId GetAction( ManVehAction act ) const {return _actionMoves[act];}
 };
+} // namespace Poseidon
 
-template<>
-struct BankTraits<ActionMap>
+namespace Poseidon::Foundation
 {
-	typedef const ActionMapName &NameType;
-	static int CompareNames( NameType n1, NameType n2 )
+	template<>
+	struct BankTraits<Poseidon::ActionMap>
 	{
-		if (n1.entry!=n2.entry) return 1;
-		if (n1.motion!=n2.motion) return 1;
-		return 0;
-	}
-	typedef RefArray<ActionMap> ContainerType;
-};
+		typedef const Poseidon::ActionMapName &NameType;
+		static int CompareNames( NameType n1, NameType n2 )
+		{
+			if (n1.entry!=n2.entry) return 1;
+			if (n1.motion!=n2.motion) return 1;
+			return 0;
+		}
+		typedef RefArray<Poseidon::ActionMap> ContainerType;
+	};
+}
+
+namespace Poseidon
+{
 
 typedef Foundation::MemAllocSA BlendAnimSelectionsStorage;
 
@@ -114,17 +121,24 @@ class BlendAnimType: public RemoveLinks, public BlendAnimSelections
 	BlendAnimType(const BlendAnimTypeName &name);
 	const BlendAnimTypeName &GetName() {return _name;}
 };
+} // namespace Poseidon
 
-template <>
-struct BankTraits<BlendAnimType>
+namespace Poseidon::Foundation
 {
-	typedef const BlendAnimTypeName &NameType;
-	static int CompareNames( BlendAnimTypeName n1, BlendAnimTypeName n2 )
+	template <>
+	struct BankTraits<Poseidon::BlendAnimType>
 	{
-		return n1.motion!=n2.motion || n1.cfg!=n2.cfg;
-	}
-	typedef LinkArray<BlendAnimType> ContainerType;
-};
+		typedef const Poseidon::BlendAnimTypeName &NameType;
+		static int CompareNames( Poseidon::BlendAnimTypeName n1, Poseidon::BlendAnimTypeName n2 )
+		{
+			return n1.motion!=n2.motion || n1.cfg!=n2.cfg;
+		}
+		typedef LinkArray<Poseidon::BlendAnimType> ContainerType;
+	};
+}
+
+namespace Poseidon
+{
 
 typedef BankArray<BlendAnimType> BlendAnimTypes;
 extern BlendAnimTypes GBlendAnimTypes;
@@ -347,17 +361,24 @@ class MovesType: public RefCountWithLinks
 
 	MoveId GetEquivalent( MoveId move ) const;
 };
+} // namespace Poseidon
 
-template <>
-struct BankTraits<MovesType>
+namespace Poseidon::Foundation
 {
-	typedef const MovesTypeName &NameType;
-	static int CompareNames( NameType n1, NameType n2 )
+	template <>
+	struct BankTraits<Poseidon::MovesType>
 	{
-		return n1.shape!=n2.shape || n1.motionType!=n2.motionType;
-	}
-	typedef LinkArray<MovesType> ContainerType;
-};
+		typedef const Poseidon::MovesTypeName &NameType;
+		static int CompareNames( NameType n1, NameType n2 )
+		{
+			return n1.shape!=n2.shape || n1.motionType!=n2.motionType;
+		}
+		typedef LinkArray<Poseidon::MovesType> ContainerType;
+	};
+}
+
+namespace Poseidon
+{
 
 typedef BankArray<MovesType> MovesTypeBank;
 extern MovesTypeBank MovesTypes;

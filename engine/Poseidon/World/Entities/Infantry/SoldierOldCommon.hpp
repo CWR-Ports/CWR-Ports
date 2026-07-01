@@ -73,19 +73,27 @@ struct ActionContextGetIn : public ActionContextBase
     ActionContextGetIn(Transport* veh, UIActionType pos);
 };
 
-template <>
-struct BankTraits<AnimationRT>
+} // namespace Poseidon
+
+namespace Poseidon::Foundation
 {
-    typedef const AnimationRTName& NameType;
-    static int CompareNames(const AnimationRTName& n1, const AnimationRTName& n2)
-    {
-        int d = strcmpi(n1.name, n2.name);
-        if (d) return d;
-        d = (char*)n1.skeleton.GetRef() - (char*)n2.skeleton.GetRef();
-        return d;
-    }
-    typedef RefArray<AnimationRT> ContainerType;
-};
+	template <>
+	struct BankTraits<Poseidon::AnimationRT>
+	{
+		typedef const Poseidon::AnimationRTName& NameType;
+		static int CompareNames(const Poseidon::AnimationRTName& n1, const Poseidon::AnimationRTName& n2)
+		{
+			int d = strcmpi(n1.name, n2.name);
+			if (d) return d;
+			d = (char*)n1.skeleton.GetRef() - (char*)n2.skeleton.GetRef();
+			return d;
+		}
+		typedef RefArray<Poseidon::AnimationRT> ContainerType;
+	};
+}
+
+namespace Poseidon
+{
 
 extern BankArray<AnimationRT> AnimationRTBank;
 extern BankArray<WeightInfo> WeigthBank;

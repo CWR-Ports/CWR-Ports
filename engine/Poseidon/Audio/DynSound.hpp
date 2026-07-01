@@ -49,21 +49,24 @@ class DynSound: public RefCountWithLinks
 
 } // namespace Poseidon
 #include <Poseidon/Foundation/Containers/BankArray.hpp>
+
+namespace Poseidon::Foundation
+{
+	template <>
+	struct BankTraits<Poseidon::DynSound>
+	{
+		typedef const char *NameType;
+		static int CompareNames(const char *n1, const char *n2)
+		{
+			return strcmpi(n1,n2);
+		}
+		// store only links - this guarantees releasing when mission changes etc.
+		typedef LinkArray<Poseidon::DynSound> ContainerType;
+	};
+}
+
 namespace Poseidon
 {
-
-
-template <>
-struct BankTraits<DynSound>
-{
-	typedef const char *NameType;
-	static int CompareNames(const char *n1, const char *n2)
-	{
-		return strcmpi(n1,n2);
-	}
-	// store only links - this guarantees releasing when mission changes etc.
-	typedef LinkArray<DynSound> ContainerType;
-};
 
 class DynSoundBank: public BankArray<DynSound>
 {

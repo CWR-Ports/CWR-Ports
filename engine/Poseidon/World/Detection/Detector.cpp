@@ -1326,7 +1326,6 @@ Object* Detector::GetActiveVehicle()
 
 extern SoundPars EnvSoundPars[];
 extern SoundPars EnvSoundParsNight[];
-const ParamEntry* FindMusic(RString name, SoundPars& pars);
 
 void Detector::OnActivate(Object* obj)
 {

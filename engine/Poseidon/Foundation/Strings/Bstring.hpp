@@ -7,10 +7,9 @@
 #include <Poseidon/Foundation/platform.hpp>
 
 // Disable ASan for this function - it falsely detects overlap when there is none
-#ifdef __clang__
-
 namespace Poseidon::Foundation
 {
+#ifdef __clang__
 __attribute__((no_sanitize("address")))
 #elif defined(_MSC_VER) && defined(__SANITIZE_ADDRESS__)
 __declspec(no_sanitize_address)

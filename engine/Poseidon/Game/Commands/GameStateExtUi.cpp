@@ -962,7 +962,6 @@ GameValue SoundLength(const GameState* state, GameValuePar oper1)
     return GSoundsys->GetWaveDuration(pars.name);
 }
 
-const ParamEntry* FindMusic(RString name, SoundPars& pars);
 
 GameValue PlayMusic(const GameState* state, GameValuePar oper1)
 {

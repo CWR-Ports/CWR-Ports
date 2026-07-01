@@ -59,7 +59,7 @@ public:
     size_t FrameMaintenance();
 
 private:
-    mi_theap_t* _heap;
+    mi_heap_t* _heap;
     std::atomic<size_t> _allocCount;
     std::atomic<bool> _outOfMemory;
     ProcessMemoryBudget _budget;
