@@ -194,6 +194,7 @@ endif()
 set(DIST_DIR "${CMAKE_SOURCE_DIR}/dist/${DIST_PRESET_NAME}")
 
 add_subdirectory(engine/Poseidon)
+add_subdirectory(engine/PoseidonVK)
 if(TRUE)
     add_subdirectory(engine/PoseidonGLES32)
 else()
@@ -243,7 +244,7 @@ endif()
 # into the PCH, so a shared blob would be rejected. Trivial 1-2 TU targets
 # (TcPbo, TcLister) and the standalone PoseidonFormats C-API are excluded.
 set(POSEIDON_PCH_TARGETS
-    PoseidonGL33 PoseidonGLES32 PoseidonOpenAL GameBase
+    PoseidonGL33 PoseidonGLES32 PoseidonVK PoseidonOpenAL GameBase
     PoseidonGame PoseidonGameDemo PoseidonServer PoseidonTools
     PoseidonStudio PoseidonEvaluator PoseidonTetris
     PoseidonTests PoseidonCoreTests PoseidonFoundationTests

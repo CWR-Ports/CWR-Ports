@@ -67,9 +67,9 @@ else()
         PoseidonOpenAL
     )
     if(ANDROID)
-        target_link_libraries(PoseidonGame PRIVATE PoseidonGLES32)
+        target_link_libraries(PoseidonGame PRIVATE PoseidonGLES32 PoseidonVK)
     else()
-        target_link_libraries(PoseidonGame PRIVATE PoseidonGL33)
+        target_link_libraries(PoseidonGame PRIVATE PoseidonGL33 PoseidonVK)
     endif()
     target_link_libraries(PoseidonGame PRIVATE
         -Wl,--end-group
