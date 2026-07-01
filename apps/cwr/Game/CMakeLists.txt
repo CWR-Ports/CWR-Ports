@@ -47,11 +47,17 @@ target_include_directories(PoseidonGame PRIVATE
 )
 
 # Link against libraries (Poseidon transitively brings in folded support/runtime code and externals)
+if(TARGET PoseidonGLES32)
+    set(ACTIVE_GRAPHICS_BACKEND PoseidonGLES32)
+else()
+    set(ACTIVE_GRAPHICS_BACKEND PoseidonGL33)
+endif()
+
 if(WIN32)
     target_link_libraries(PoseidonGame PRIVATE
         GameBase
         Poseidon
-        PoseidonGL33
+        ${ACTIVE_GRAPHICS_BACKEND}
         PoseidonOpenAL
         # Windows system libraries
         winmm.lib
@@ -66,11 +72,7 @@ else()
         Poseidon
         PoseidonOpenAL
     )
-    if(ANDROID)
-        target_link_libraries(PoseidonGame PRIVATE PoseidonGLES32 PoseidonVK)
-    else()
-        target_link_libraries(PoseidonGame PRIVATE PoseidonGL33 PoseidonVK)
-    endif()
+    target_link_libraries(PoseidonGame PRIVATE ${ACTIVE_GRAPHICS_BACKEND} PoseidonVK)
     target_link_libraries(PoseidonGame PRIVATE
         -Wl,--end-group
     )

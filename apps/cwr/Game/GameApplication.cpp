@@ -1456,7 +1456,7 @@ void GameApplication::RegisterAudioBackends()
 void GameApplication::RegisterGraphicsBackends()
 {
     RegisterDummyGraphicsBackend();
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(POSEIDON_GLES32)
     RegisterGLES32GraphicsBackend();
 #else
     RegisterGL33GraphicsBackend();

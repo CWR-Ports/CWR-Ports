@@ -66,10 +66,15 @@ class Engine* CreateEngineGL33(int, int, bool, int)
 {
     return nullptr;
 }
+class Engine* CreateEngineGLES32(int, int, bool, int)
+{
+    return nullptr;
+}
 } // namespace Poseidon
 namespace Poseidon
 {
 void RegisterGL33GraphicsBackend() {}
+void RegisterGLES32GraphicsBackend() {}
 } // namespace Poseidon
 
 // Catch2 main

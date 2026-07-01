@@ -27,10 +27,21 @@ pkgs.mkShell {
     pkgs.ninja
     pkgs.pkg-config-unwrapped
     pkgs.perl
+    pkgs.python3
+    pkgs.autoconf
+    pkgs.autoconf-archive
+    pkgs.automake
+    pkgs.libtool
+    pkgs.libGL
+    pkgs.vulkan-headers
+    pkgs.vulkan-loader
+    pkgs.clang-tools
   ];
   
   ANDROID_HOME = "${androidEnv.androidsdk}/libexec/android-sdk";
   ANDROID_NDK_ROOT = "${androidEnv.androidsdk}/libexec/android-sdk/ndk/26.1.10909125";
   ANDROID_NDK_HOME = "${androidEnv.androidsdk}/libexec/android-sdk/ndk/26.1.10909125";
   VCPKG_FORCE_SYSTEM_BINARIES = "1";
+  LD_LIBRARY_PATH = "${pkgs.stdenv.cc.cc.lib}/lib";
+  hardeningDisable = [ "format" ];
 }

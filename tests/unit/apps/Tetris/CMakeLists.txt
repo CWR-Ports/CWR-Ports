@@ -22,8 +22,14 @@ find_package(freetype CONFIG REQUIRED)
 find_package(CLI11 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 
+if(TARGET PoseidonGLES32)
+    set(ACTIVE_GRAPHICS_BACKEND PoseidonGLES32)
+else()
+    set(ACTIVE_GRAPHICS_BACKEND PoseidonGL33)
+endif()
+
 target_link_libraries(PoseidonTetrisTests PRIVATE
-    GameBase PoseidonGL33 Poseidon PoseidonOpenAL
+    GameBase ${ACTIVE_GRAPHICS_BACKEND} Poseidon PoseidonOpenAL PoseidonVK
     SDL3::SDL3 Freetype::Freetype CLI11::CLI11 imgui::imgui
     Catch2::Catch2WithMain
 )

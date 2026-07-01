@@ -139,7 +139,7 @@ add_compile_options(
     -Wno-format                           # Format string mismatches (MSVC vs clang differences)
 )
 
-enable_testing()
+include(CTest)
 
 # Backend availability — driven by platform, overridable
 option(CWR_HAS_OPENGL    "OpenGL 4.5 graphics backend"  ON)
@@ -160,7 +160,7 @@ configure_file(
 )
 include_directories(${CMAKE_BINARY_DIR}/generated)
 
-if(NOT ANDROID)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
     find_package(Catch2 CONFIG REQUIRED)
 endif()
 find_package(enkiTS CONFIG REQUIRED)
@@ -197,8 +197,10 @@ add_subdirectory(engine/Poseidon)
 add_subdirectory(engine/PoseidonVK)
 if(TRUE)
     add_subdirectory(engine/PoseidonGLES32)
+    add_compile_definitions(POSEIDON_GLES32=1)
 else()
     add_subdirectory(engine/PoseidonGL33)
+    add_compile_definitions(POSEIDON_GL33=1)
 endif()
 add_subdirectory(engine/PoseidonOpenAL)
 add_subdirectory(engine/PoseidonFormats)

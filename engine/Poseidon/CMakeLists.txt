@@ -249,7 +249,7 @@ target_include_directories(Poseidon PUBLIC
     ${CMAKE_SOURCE_DIR}/engine
     ${CMAKE_SOURCE_DIR}/thirdparty
 )
-if(ANDROID)
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
     target_include_directories(Poseidon PUBLIC
         ${CMAKE_SOURCE_DIR}/thirdparty/glad-es/include
     )
@@ -271,7 +271,7 @@ target_link_libraries(Poseidon PUBLIC
     etcpak
 )
 if(NOT WIN32)
-    if(ANDROID)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Android")
         target_link_libraries(Poseidon PUBLIC dl)
     else()
         target_link_libraries(Poseidon PUBLIC pthread dl)

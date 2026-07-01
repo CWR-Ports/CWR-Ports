@@ -51,20 +51,22 @@ target_include_directories(PoseidonTetris PRIVATE
     ${CMAKE_SOURCE_DIR}/apps/cwr/Game
 )
 
+if(TARGET PoseidonGLES32)
+    set(ACTIVE_GRAPHICS_BACKEND PoseidonGLES32)
+else()
+    set(ACTIVE_GRAPHICS_BACKEND PoseidonGL33)
+endif()
+
 if(WIN32)
     target_link_libraries(PoseidonTetris PRIVATE
-        GameBase Poseidon PoseidonGL33 PoseidonOpenAL
+        GameBase Poseidon ${ACTIVE_GRAPHICS_BACKEND} PoseidonOpenAL
         winmm.lib version.lib ws2_32.lib legacy_stdio_definitions.lib
     )
 else()
     target_link_libraries(PoseidonTetris PRIVATE
-        -Wl,--start-group GameBase Poseidon PoseidonOpenAL
+        -Wl,--start-group GameBase Poseidon PoseidonOpenAL PoseidonVK
     )
-    if(ANDROID)
-        target_link_libraries(PoseidonTetris PRIVATE PoseidonGLES32)
-    else()
-        target_link_libraries(PoseidonTetris PRIVATE PoseidonGL33)
-    endif()
+    target_link_libraries(PoseidonTetris PRIVATE ${ACTIVE_GRAPHICS_BACKEND})
     target_link_libraries(PoseidonTetris PRIVATE -Wl,--end-group)
     if(NOT ANDROID)
         target_link_libraries(PoseidonTetris PRIVATE pthread)

@@ -41,20 +41,22 @@ target_include_directories(PoseidonGameDemo PRIVATE
     ${CMAKE_SOURCE_DIR}/apps/cwr/Game
 )
 
+if(TARGET PoseidonGLES32)
+    set(ACTIVE_GRAPHICS_BACKEND PoseidonGLES32)
+else()
+    set(ACTIVE_GRAPHICS_BACKEND PoseidonGL33)
+endif()
+
 if(WIN32)
     target_link_libraries(PoseidonGameDemo PRIVATE
-        GameBase Poseidon PoseidonGL33 PoseidonOpenAL
+        GameBase Poseidon ${ACTIVE_GRAPHICS_BACKEND} PoseidonOpenAL
         winmm.lib version.lib ws2_32.lib legacy_stdio_definitions.lib
     )
 else()
     target_link_libraries(PoseidonGameDemo PRIVATE
         -Wl,--start-group GameBase Poseidon PoseidonOpenAL
     )
-    if(ANDROID)
-        target_link_libraries(PoseidonGameDemo PRIVATE PoseidonGLES32 PoseidonVK)
-    else()
-        target_link_libraries(PoseidonGameDemo PRIVATE PoseidonGL33 PoseidonVK)
-    endif()
+    target_link_libraries(PoseidonGameDemo PRIVATE ${ACTIVE_GRAPHICS_BACKEND} PoseidonVK)
     target_link_libraries(PoseidonGameDemo PRIVATE -Wl,--end-group)
     if(NOT ANDROID)
         target_link_libraries(PoseidonGameDemo PRIVATE pthread)
