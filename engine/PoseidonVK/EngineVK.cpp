@@ -353,7 +353,7 @@ bool EngineVK::ZBiasExclusion() const
 
 AbstractTextBank* EngineVK::TextBank()
 {
-    return nullptr;
+    return _textBank;
 }
 
 void EngineVK::TextureDestroyed(Texture* tex)

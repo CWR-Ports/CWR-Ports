@@ -10,6 +10,10 @@ namespace Poseidon
 
 void EngineVK::ClearPipelineCache()
 {
+    if (_device == VK_NULL_HANDLE)
+    {
+        return;
+    }
     LOG_INFO(Graphics, "Vulkan: Clearing Pipeline Cache...");
     for (auto& pair : _pipelineCache)
     {

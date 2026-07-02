@@ -697,6 +697,10 @@ static VkShaderModule CompileShaderModule(VkDevice device, EShLanguage stage, co
 
 void EngineVK::InitShaders()
 {
+    if (_device == VK_NULL_HANDLE)
+    {
+        return;
+    }
     LOG_INFO(Graphics, "Vulkan: Initializing and compiling all shader modules...");
     
     _vsModules[VSScreen] = CompileShaderModule(_device, EShLangVertex, s_vsScreenGLSL, "vsScreen");
@@ -713,6 +717,10 @@ void EngineVK::InitShaders()
 
 void EngineVK::DeinitShaders()
 {
+    if (_device == VK_NULL_HANDLE)
+    {
+        return;
+    }
     LOG_INFO(Graphics, "Vulkan: Destroying all shader modules...");
     
     for (int i = 0; i < NVertexShaders; i++)
@@ -736,6 +744,10 @@ void EngineVK::DeinitShaders()
 
 void EngineVK::InitPipelineLayouts()
 {
+    if (_device == VK_NULL_HANDLE)
+    {
+        return;
+    }
     LOG_INFO(Graphics, "Vulkan: Initializing Descriptor Set Layouts and Pipeline Layouts...");
     
     // Globals
@@ -810,6 +822,10 @@ void EngineVK::InitPipelineLayouts()
 
 void EngineVK::DeinitPipelineLayouts()
 {
+    if (_device == VK_NULL_HANDLE)
+    {
+        return;
+    }
     LOG_INFO(Graphics, "Vulkan: Destroying Pipeline Layouts and Descriptor Set Layouts...");
     
     if (_shadowSolidPipeline != VK_NULL_HANDLE)

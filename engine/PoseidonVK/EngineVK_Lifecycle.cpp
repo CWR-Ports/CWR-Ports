@@ -563,8 +563,16 @@ void EngineVK::InitVulkan()
 
 void EngineVK::ShutdownVulkan()
 {
-    if (_device)
-        vkDeviceWaitIdle(_device);
+    if (_device == VK_NULL_HANDLE)
+    {
+        if (_instance) vkDestroyInstance(_instance, nullptr);
+        if (_sdlWindow) SDL_DestroyWindow(_sdlWindow);
+        _sdlWindow = nullptr;
+        _vkReady = false;
+        return;
+    }
+
+    vkDeviceWaitIdle(_device);
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
