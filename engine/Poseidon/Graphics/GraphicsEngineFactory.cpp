@@ -139,7 +139,13 @@ Engine* GraphicsEngineFactory::Create(const std::string& requestedBackend, const
     if (backend == nullptr || !IsDescriptorAvailable(backend->descriptor))
         return nullptr;
 
-    return backend->descriptor.create(params);
+    Engine* engine = backend->descriptor.create(params);
+    if (engine && !engine->IsAbleToDraw())
+    {
+        delete engine;
+        return nullptr;
+    }
+    return engine;
 }
 
 bool GraphicsEngineFactory::Register(const GraphicsBackendDescriptor& descriptor)
@@ -156,7 +162,11 @@ Engine* GraphicsEngineFactory::CreateAuto(const GraphicsEngineParams& params)
 
         Engine* engine = backend->descriptor.create(params);
         if (engine != nullptr)
-            return engine;
+        {
+            if (engine->IsAbleToDraw())
+                return engine;
+            delete engine;
+        }
     }
 
     return nullptr;

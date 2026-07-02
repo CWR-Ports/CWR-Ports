@@ -349,6 +349,7 @@ protected:
     void EnableReorderQueues(bool enableReorder) override;
 
 public:
+    bool IsReady() const { return _vkReady; }
     EngineVK(int width, int height, bool windowed, int bpp);
     ~EngineVK() override;
 

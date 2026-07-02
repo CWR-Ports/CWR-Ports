@@ -28,7 +28,13 @@ namespace Poseidon
 {
 Engine* CreateEngineVK(int width, int height, bool windowed, int bpp)
 {
-    return new EngineVK(width, height, windowed, bpp);
+    EngineVK* engine = new EngineVK(width, height, windowed, bpp);
+    if (!engine->IsReady())
+    {
+        delete engine;
+        return nullptr;
+    }
+    return engine;
 }
 
 EngineVK::EngineVK(int width, int height, bool windowed, int bpp)

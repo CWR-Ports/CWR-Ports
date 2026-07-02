@@ -1072,17 +1072,20 @@ void EngineGL33::ShutdownGL()
         _textBank = nullptr;
     }
 
-    DeinitVertexShaders();
-    DeinitPixelShaders();
-    DestroySamplerStates();
-    DestroyVBTL();
-    DestroyVB();
-
-    if (_fallbackWhiteTex)
+    if (_glContext)
     {
-        GL33Bind::OnTexDeleted(_fallbackWhiteTex);
-        glDeleteTextures(1, &_fallbackWhiteTex);
-        _fallbackWhiteTex = 0;
+        DeinitVertexShaders();
+        DeinitPixelShaders();
+        DestroySamplerStates();
+        DestroyVBTL();
+        DestroyVB();
+
+        if (_fallbackWhiteTex)
+        {
+            GL33Bind::OnTexDeleted(_fallbackWhiteTex);
+            glDeleteTextures(1, &_fallbackWhiteTex);
+            _fallbackWhiteTex = 0;
+        }
     }
 }
 
