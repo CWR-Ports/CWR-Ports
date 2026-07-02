@@ -583,6 +583,28 @@ void EngineVK::ShutdownVulkan()
     for (auto iv : _swapchainImageViews)
         vkDestroyImageView(_device, iv, nullptr);
 
+    // shadow map cleanup
+    if (!_shadowLayerViews.empty())
+    {
+        for (auto view : _shadowLayerViews)
+            vkDestroyImageView(_device, view, nullptr);
+        _shadowLayerViews.clear();
+    }
+    if (!_shadowFramebuffers.empty())
+    {
+        for (auto fb : _shadowFramebuffers)
+            vkDestroyFramebuffer(_device, fb, nullptr);
+        _shadowFramebuffers.clear();
+    }
+    if (_shadowImageView != VK_NULL_HANDLE)
+        vkDestroyImageView(_device, _shadowImageView, nullptr);
+    if (_shadowImage != VK_NULL_HANDLE)
+        vmaDestroyImage(_vmaAllocator, _shadowImage, _shadowImageAlloc);
+    if (_shadowRenderPass != VK_NULL_HANDLE)
+        vkDestroyRenderPass(_device, _shadowRenderPass, nullptr);
+    if (_shadowSampler != VK_NULL_HANDLE)
+        vkDestroySampler(_device, _shadowSampler, nullptr);
+
     if (_vmaAllocator)
     {
         vmaDestroyAllocator(_vmaAllocator);

@@ -7,6 +7,7 @@ set(POSEIDON_VK_HEADERS
     EngineVK_Material.cpp
     EngineVK_State.cpp
     EngineVK_Shaders.cpp
+    EngineVK_ShadowDepth.cpp
 )
 
 add_library(PoseidonVK STATIC

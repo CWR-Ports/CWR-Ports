@@ -267,6 +267,23 @@ protected:
     int _minGuardY = 0;
     int _maxGuardY = 0;
 
+    // Shadow Maps
+    bool EnsureShadowTarget(int res, int layers);
+    VkRenderPass _shadowRenderPass = VK_NULL_HANDLE;
+    VkImage _shadowImage = VK_NULL_HANDLE;
+    VmaAllocation _shadowImageAlloc = VK_NULL_HANDLE;
+    VkImageView _shadowImageView = VK_NULL_HANDLE; // array view for sampling
+    std::vector<VkImageView> _shadowLayerViews; // per-layer views for rendering
+    std::vector<VkFramebuffer> _shadowFramebuffers;
+    VkSampler _shadowSampler = VK_NULL_HANDLE;
+    bool _shadowMapActive = false;
+    int _shadowMapRes = 0;
+    int _shadowCascades = 0;
+    int _shadowOmniCount = 0;
+    float _shadowMapVP[4 * 16] = {0};
+    float _shadowSplits[4] = {0};
+    float _shadowCamFwd[3] = {0};
+
     QueueVK _queueNo;
     std::vector<TLVertex> _vboMirror;
     int _vboUploadedVerts = 0;
@@ -354,8 +371,17 @@ public:
     
     // overrides needed for draw
     void SetGrassParams(float a1, float a2, float a3 = 0, float a4 = 0) override {}
-    void SetShadowMapsEnabled(bool enabled) override {}
-    bool ShadowMapsEnabled() const override { return false; }
+    void SetShadowMapSunFactor(float factor01) override;
+    void BeginShadowPass() override;
+    void EndShadowPass() override;
+    bool ShadowDepthProbe(const float* lightVP16, const float* triXYZ, int vertCount, int res, float* outDepth) override;
+    bool ShadowMapCacheSelfTest() override;
+    void SetShadowMapsEnabled(bool enabled) override;
+    bool ShadowMapsEnabled() const override;
+    ShadowMapTuning GetShadowMapTuning() const override;
+    void SetShadowMapTuning(const ShadowMapTuning& tuning) override;
+    void RenderShadowDepthScene(const float* lightVPs, const float* splitViewDist, const float* camFwd3, int numCascades, int omniCount, int res, const ShadowCasterSet& casters) override;
+    bool DumpShadowMap(const char* path) override;
     bool SetWindowMode(Poseidon::WindowMode mode) override;
     Poseidon::WindowMode GetCurrentWindowMode() const override;
     void OnWindowResized(int w, int h) override;
