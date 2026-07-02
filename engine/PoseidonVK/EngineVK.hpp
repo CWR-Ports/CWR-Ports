@@ -64,6 +64,9 @@ class EngineVK : public Engine
 {
     typedef Engine base;
 
+    friend class SurfaceInfoVK;
+    friend class TextBankVK;
+
 protected:
     int _w = 0;
     int _h = 0;
@@ -107,6 +110,8 @@ protected:
 
     VkShaderModule _vsModules[NVertexShaders] = { VK_NULL_HANDLE };
     VkShaderModule _fsModules[NPixelShaders] = { VK_NULL_HANDLE };
+
+    TextBankVK* _textBank = nullptr;
 
     int _bias = 0;
     float _gamma = 1.0f;

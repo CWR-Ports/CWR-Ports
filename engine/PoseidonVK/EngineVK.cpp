@@ -16,6 +16,8 @@
 //
 // I DO NOT YET KNOW IF THIS WILL BE FEASIBLE AT ALL BUT LETS SEE
 
+#include <Poseidon/Dev/Debug/DebugOverlay.hpp>
+#include <PoseidonVK/TextBankVK.hpp>
 #include <PoseidonVK/EngineVK.hpp>
 #include <Poseidon/Core/Application.hpp>
 #include <Poseidon/Core/Config/EngineConfig.hpp>
@@ -33,12 +35,14 @@ EngineVK::EngineVK(int width, int height, bool windowed, int bpp)
 {
     _w = width;
     _h = height;
-    _windowed = windowed;
     _pixelSize = bpp;
+    _windowed = windowed;
     _minGuardX = 0;
     _maxGuardX = _w;
     _minGuardY = 0;
     _maxGuardY = _h;
+
+    _textBank = new TextBankVK(this);
 
     LOG_INFO(Graphics, "PoseidonVK: Initializing Vulkan engine ({}x{} {}bpp)", _w, _h, _pixelSize);
 
@@ -49,6 +53,9 @@ EngineVK::EngineVK(int width, int height, bool windowed, int bpp)
 EngineVK::~EngineVK()
 {
     LOG_INFO(Graphics, "PoseidonVK: Destroying Vulkan engine");
+
+    delete _textBank;
+    _textBank = nullptr;
 
     DeinitShaders();
     ShutdownVulkan();
