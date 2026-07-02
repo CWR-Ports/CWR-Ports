@@ -43,6 +43,7 @@ pkgs.mkShell {
     pkgs.wayland-protocols
     pkgs.libxkbcommon
     pkgs.libx11
+    pkgs.libxcb
     pkgs.libxcursor
     pkgs.libxi
     pkgs.libxrandr
@@ -68,6 +69,7 @@ pkgs.mkShell {
     pkgs.wayland
     pkgs.libxkbcommon
     pkgs.libx11
+    pkgs.libxcb
     pkgs.libxcursor
     pkgs.libxi
     pkgs.libxrandr
