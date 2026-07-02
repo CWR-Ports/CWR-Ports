@@ -21,11 +21,20 @@
 
 using namespace Poseidon;
 
+typedef struct VmaAllocator_T* VmaAllocator;
+
 namespace Poseidon
 {
 class TextureVK;
 class TextBankVK;
 class EngineVK;
+
+struct SVertex
+{
+    Vector3P pos;
+    Vector3P norm;
+    Poseidon::UVPair t0;
+};
 
 // entry-point creator for GraphicsEngineFactory
 Engine* CreateEngineVK(int width, int height, bool windowed, int bpp);
@@ -93,6 +102,7 @@ protected:
 
     int _queueFamilyIndices[2] = {-1, -1};
     VkDebugUtilsMessengerEXT _debugMessenger = VK_NULL_HANDLE;
+    VmaAllocator _vmaAllocator = VK_NULL_HANDLE;
     bool _vkReady = false;
 
     VkShaderModule _vsModules[NVertexShaders] = { VK_NULL_HANDLE };
@@ -169,6 +179,9 @@ public:
 
     /// drawing overrides ///
     void Clear(bool clearZ = true, bool clear = true, PackedColor color = PackedColor(0)) override;
+    VertexBuffer* CreateVertexBuffer(const Shape& src, VBType type) override;
+    int CompareBuffers(const Shape& a, const Shape& b) override;
+
     void DrawDecal(Vector3Par pos, float rhw, float sizeX, float sizeY, PackedColor col, const MipInfo& mip, int specFlags) override;
     void DrawPolygon(const VertexIndex* i, int n) override;
     void DrawSection(const FaceArray& face, Offset beg, Offset end) override;

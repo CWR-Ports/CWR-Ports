@@ -16,6 +16,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <vulkan/vulkan.h>
+#include "vk_mem_alloc.h"
 
 #include <algorithm>
 #include <cstring>
@@ -545,6 +546,17 @@ void EngineVK::InitVulkan()
     if (!CreateCommandPool()) return;
     if (!CreateSyncObjects()) return;
 
+    VmaAllocatorCreateInfo allocatorInfo{};
+    allocatorInfo.physicalDevice = _physicalDevice;
+    allocatorInfo.device = _device;
+    allocatorInfo.instance = _instance;
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_1;
+    if (vmaCreateAllocator(&allocatorInfo, &_vmaAllocator) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "PoseidonVK: vmaCreateAllocator failed");
+        return;
+    }
+
     _vkReady = true;
     LOG_INFO(Graphics, "PoseidonVK: vulkan pipeline fully initialized");
 }
@@ -570,6 +582,12 @@ void EngineVK::ShutdownVulkan()
 
     for (auto iv : _swapchainImageViews)
         vkDestroyImageView(_device, iv, nullptr);
+
+    if (_vmaAllocator)
+    {
+        vmaDestroyAllocator(_vmaAllocator);
+        _vmaAllocator = VK_NULL_HANDLE;
+    }
 
     if (_swapchain) vkDestroySwapchainKHR(_device, _swapchain, nullptr);
     if (_device) vkDestroyDevice(_device, nullptr);
