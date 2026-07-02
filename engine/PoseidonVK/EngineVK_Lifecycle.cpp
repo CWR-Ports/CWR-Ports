@@ -478,7 +478,7 @@ bool EngineVK::CreateCommandPool()
         return false;
     }
 
-    _commandBuffers.resize(_swapchainImages.size());
+    _commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
     VkCommandBufferAllocateInfo cbai{};
     cbai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     cbai.commandPool = _commandPool;

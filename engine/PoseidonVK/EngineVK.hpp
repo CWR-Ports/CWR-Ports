@@ -88,6 +88,8 @@ protected:
     std::vector<VkSemaphore> _renderFinishedSem;
     std::vector<VkFence> _inFlightFences;
     uint32_t _currentFrame = 0;
+    uint32_t _currentImageIndex = 0;
+    bool _frameOpen = false;
 
     int _queueFamilyIndices[2] = {-1, -1};
     VkDebugUtilsMessengerEXT _debugMessenger = VK_NULL_HANDLE;

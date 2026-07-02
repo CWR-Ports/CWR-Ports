@@ -56,25 +56,112 @@ EngineVK::~EngineVK()
 
 bool EngineVK::InitDrawDone()
 {
-    return true;
+    return _frameOpen;
 }
 
 bool EngineVK::IsAbleToDraw()
 {
-    return true;
+    return _vkReady && _sdlWindow != nullptr;
 }
 
 void EngineVK::InitDraw(bool clear, PackedColor color)
 {
+    if (_frameOpen || !_vkReady) return;
+
+    vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
+    vkResetFences(_device, 1, &_inFlightFences[_currentFrame]);
+
+    VkResult result = vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX,
+                                            _imageAvailableSem[_currentFrame],
+                                            VK_NULL_HANDLE, &_currentImageIndex);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+    {
+        // TODO: handle swapchain recreation
+    }
+
+    VkCommandBuffer cb = _commandBuffers[_currentFrame];
+    vkResetCommandBuffer(cb, 0);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    vkBeginCommandBuffer(cb, &beginInfo);
+
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = _renderPass;
+    renderPassInfo.framebuffer = _swapchainFramebuffers[_currentImageIndex];
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = _swapchainExtent;
+
+    VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+    if (clear)
+    {
+        float r = ((color >> 16) & 0xFF) / 255.0f;
+        float g = ((color >> 8) & 0xFF) / 255.0f;
+        float b = (color & 0xFF) / 255.0f;
+        clearColor.color = {{r, g, b, 1.0f}};
+    }
+    renderPassInfo.clearValueCount = 1;
+    renderPassInfo.pClearValues = &clearColor;
+
+    vkCmdBeginRenderPass(cb, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    base::InitDraw();
+    _frameOpen = true;
 }
 
 void EngineVK::FinishDraw()
 {
+    if (!_frameOpen) return;
+
+    base::FinishDraw();
+    base::DrawFinishTexts();
+
     _frameCounter++;
+    _frameOpen = false;
 }
 
 void EngineVK::NextFrame()
 {
+    if (!_vkReady) return;
+
+    VkCommandBuffer cb = _commandBuffers[_currentFrame];
+    vkCmdEndRenderPass(cb);
+    vkEndCommandBuffer(cb);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    VkSemaphore waitSemaphores[] = {_imageAvailableSem[_currentFrame]};
+    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cb;
+
+    VkSemaphore signalSemaphores[] = {_renderFinishedSem[_currentFrame]};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    vkQueueSubmit(_graphicsQueue, 1, &submitInfo, _inFlightFences[_currentFrame]);
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+
+    VkSwapchainKHR swapchains[] = {_swapchain};
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapchains;
+    presentInfo.pImageIndices = &_currentImageIndex;
+
+    vkQueuePresentKHR(_presentQueue, &presentInfo);
+
+    _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+
+    base::NextFrame();
 }
 
 void EngineVK::DrawTestPattern(const char* name)
