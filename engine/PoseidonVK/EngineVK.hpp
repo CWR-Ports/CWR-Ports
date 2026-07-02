@@ -276,6 +276,13 @@ protected:
     std::vector<VkImageView> _shadowLayerViews; // per-layer views for rendering
     std::vector<VkFramebuffer> _shadowFramebuffers;
     VkSampler _shadowSampler = VK_NULL_HANDLE;
+    VkShaderModule _shadowSolidVertexShader = VK_NULL_HANDLE;
+    VkShaderModule _shadowSolidFragmentShader = VK_NULL_HANDLE;
+    VkPipelineLayout _shadowPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline _shadowSolidPipeline = VK_NULL_HANDLE;
+    VkRenderPass _shadowPipelineRenderPass = VK_NULL_HANDLE;
+    ShadowMapTuning _shadowTuning = {};
+    float _shadowSunFactor = 1.0f;
     bool _shadowMapActive = false;
     int _shadowMapRes = 0;
     int _shadowCascades = 0;

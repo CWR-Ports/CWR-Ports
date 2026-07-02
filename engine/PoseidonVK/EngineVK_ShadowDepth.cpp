@@ -3,8 +3,232 @@
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 #include <PoseidonVK/VertexBufferVK.hpp>
 
+#include <algorithm>
+#include <cstring>
+#include <vector>
+
+#include <glslang/Public/ResourceLimits.h>
+#include <glslang/Public/ShaderLang.h>
+#include <glslang/SPIRV/GlslangToSpv.h>
+
 namespace Poseidon
 {
+
+namespace
+{
+static const char s_shadowSolidVsGLSL[] = R"(#version 450
+layout(push_constant) uniform ShadowPush {
+    mat4 lightVP;
+} pc;
+
+layout(location = 0) in vec3 pos;
+
+void main() {
+    gl_Position = pc.lightVP * vec4(pos, 1.0);
+}
+)";
+
+static const char s_shadowSolidFsGLSL[] = R"(#version 450
+void main() {}
+)";
+
+static VkShaderModule CompileLocalShader(VkDevice device, EShLanguage stage, const char* source, const char* name)
+{
+    glslang::TShader shader(stage);
+    const char* strings[1] = {source};
+    shader.setStrings(strings, 1);
+
+    shader.setEnvInput(glslang::EShSourceGlsl, stage, glslang::EShClientVulkan, glslang::EShTargetVulkan_1_0);
+    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_0);
+    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
+
+    const TBuiltInResource* resources = GetDefaultResources();
+    const EShMessages rules = static_cast<EShMessages>(EShMsgDefault | EShMsgSpvRules | EShMsgVulkanRules);
+
+    if (!shader.parse(resources, 450, false, rules))
+    {
+        LOG_ERROR(Graphics, "Vulkan: shadow shader compile error [{}]: {}", name, shader.getInfoLog());
+        return VK_NULL_HANDLE;
+    }
+
+    glslang::TProgram program;
+    program.addShader(&shader);
+    if (!program.link(rules))
+    {
+        LOG_ERROR(Graphics, "Vulkan: shadow shader link error [{}]: {}", name, program.getInfoLog());
+        return VK_NULL_HANDLE;
+    }
+
+    std::vector<unsigned int> spirv;
+    glslang::GlslangToSpv(*program.getIntermediate(stage), spirv);
+
+    VkShaderModuleCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = spirv.size() * sizeof(unsigned int);
+    createInfo.pCode = spirv.data();
+
+    VkShaderModule module = VK_NULL_HANDLE;
+    if (vkCreateShaderModule(device, &createInfo, nullptr, &module) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: failed to create shadow shader module [{}]", name);
+        return VK_NULL_HANDLE;
+    }
+
+    return module;
+}
+
+static void DestroyShadowSolidPipeline(VkDevice device, VkShaderModule& vertexShader, VkShaderModule& fragmentShader,
+                                       VkPipelineLayout& pipelineLayout, VkPipeline& pipeline,
+                                       VkRenderPass& cachedRenderPass)
+{
+    if (pipeline != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(device, pipeline, nullptr);
+        pipeline = VK_NULL_HANDLE;
+    }
+    if (pipelineLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+        pipelineLayout = VK_NULL_HANDLE;
+    }
+    if (vertexShader != VK_NULL_HANDLE)
+    {
+        vkDestroyShaderModule(device, vertexShader, nullptr);
+        vertexShader = VK_NULL_HANDLE;
+    }
+    if (fragmentShader != VK_NULL_HANDLE)
+    {
+        vkDestroyShaderModule(device, fragmentShader, nullptr);
+        fragmentShader = VK_NULL_HANDLE;
+    }
+    cachedRenderPass = VK_NULL_HANDLE;
+}
+
+static bool EnsureShadowSolidPipeline(VkDevice device, VkRenderPass renderPass, VkShaderModule& vertexShader,
+                                      VkShaderModule& fragmentShader, VkPipelineLayout& pipelineLayout,
+                                      VkPipeline& pipeline, VkRenderPass& cachedRenderPass)
+{
+    if (pipeline != VK_NULL_HANDLE && cachedRenderPass == renderPass)
+        return true;
+
+    DestroyShadowSolidPipeline(device, vertexShader, fragmentShader, pipelineLayout, pipeline, cachedRenderPass);
+
+    vertexShader = CompileLocalShader(device, EShLangVertex, s_shadowSolidVsGLSL, "shadow-solid-vs");
+    fragmentShader = CompileLocalShader(device, EShLangFragment, s_shadowSolidFsGLSL, "shadow-solid-fs");
+    if (vertexShader == VK_NULL_HANDLE || fragmentShader == VK_NULL_HANDLE)
+    {
+        DestroyShadowSolidPipeline(device, vertexShader, fragmentShader, pipelineLayout, pipeline, cachedRenderPass);
+        return false;
+    }
+
+    VkPushConstantRange pushRange{};
+    pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushRange.offset = 0;
+    pushRange.size = sizeof(float) * 16;
+
+    VkPipelineLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layoutInfo.pushConstantRangeCount = 1;
+    layoutInfo.pPushConstantRanges = &pushRange;
+
+    if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: failed to create shadow pipeline layout");
+        DestroyShadowSolidPipeline(device, vertexShader, fragmentShader, pipelineLayout, pipeline, cachedRenderPass);
+        return false;
+    }
+
+    VkPipelineShaderStageCreateInfo stages[2]{};
+    stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    stages[0].module = vertexShader;
+    stages[0].pName = "main";
+    stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    stages[1].module = fragmentShader;
+    stages[1].pName = "main";
+
+    VkVertexInputBindingDescription binding{};
+    binding.binding = 0;
+    binding.stride = sizeof(float) * 3;
+    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkVertexInputAttributeDescription attr{};
+    attr.binding = 0;
+    attr.location = 0;
+    attr.format = VK_FORMAT_R32G32B32_SFLOAT;
+    attr.offset = 0;
+
+    VkPipelineVertexInputStateCreateInfo vertexInput{};
+    vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInput.vertexBindingDescriptionCount = 1;
+    vertexInput.pVertexBindingDescriptions = &binding;
+    vertexInput.vertexAttributeDescriptionCount = 1;
+    vertexInput.pVertexAttributeDescriptions = &attr;
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount = 1;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.lineWidth = 1.0f;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencil.depthTestEnable = VK_TRUE;
+    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+
+    VkPipelineColorBlendStateCreateInfo colorBlend{};
+    colorBlend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlend.attachmentCount = 0;
+
+    std::vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+    dynamicState.pDynamicStates = dynamicStates.data();
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = stages;
+    pipelineInfo.pVertexInputState = &vertexInput;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    pipelineInfo.pColorBlendState = &colorBlend;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.layout = pipelineLayout;
+    pipelineInfo.renderPass = renderPass;
+    pipelineInfo.subpass = 0;
+
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: failed to create shadow solid pipeline");
+        DestroyShadowSolidPipeline(device, vertexShader, fragmentShader, pipelineLayout, pipeline, cachedRenderPass);
+        return false;
+    }
+
+    cachedRenderPass = renderPass;
+    return true;
+}
+} // namespace
 
 static void TransitionImageLayout(VkDevice device, VkCommandPool pool, VkQueue queue, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, int layers)
 {
@@ -109,6 +333,8 @@ bool EngineVK::EnsureShadowTarget(int res, int layers)
     }
     if (_shadowRenderPass != VK_NULL_HANDLE)
     {
+        DestroyShadowSolidPipeline(_device, _shadowSolidVertexShader, _shadowSolidFragmentShader, _shadowPipelineLayout,
+                                   _shadowSolidPipeline, _shadowPipelineRenderPass);
         vkDestroyRenderPass(_device, _shadowRenderPass, nullptr);
         _shadowRenderPass = VK_NULL_HANDLE;
     }
@@ -193,7 +419,7 @@ bool EngineVK::EnsureShadowTarget(int res, int layers)
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     VkAttachmentReference depthAttachmentRef{};
@@ -291,6 +517,11 @@ bool EngineVK::EnsureShadowTarget(int res, int layers)
 
 void EngineVK::SetShadowMapSunFactor(float factor01)
 {
+    if (factor01 < 0.0f)
+        factor01 = 0.0f;
+    else if (factor01 > 1.0f)
+        factor01 = 1.0f;
+    _shadowSunFactor = factor01;
 }
 
 void EngineVK::BeginShadowPass()
@@ -313,20 +544,26 @@ bool EngineVK::ShadowMapCacheSelfTest()
 
 void EngineVK::SetShadowMapsEnabled(bool enabled)
 {
+    _shadowTuning.enabled = enabled;
+    if (!enabled)
+        _shadowMapActive = false;
 }
 
 bool EngineVK::ShadowMapsEnabled() const
 {
-    return _shadowMapActive;
+    return _shadowTuning.enabled;
 }
 
 Engine::ShadowMapTuning EngineVK::GetShadowMapTuning() const
 {
-    return {};
+    return _shadowTuning;
 }
 
 void EngineVK::SetShadowMapTuning(const ShadowMapTuning& tuning)
 {
+    _shadowTuning = tuning;
+    if (!_shadowTuning.enabled)
+        _shadowMapActive = false;
 }
 
 void EngineVK::RenderShadowDepthScene(const float* lightVPs, const float* splitViewDist, const float* camFwd3, int numCascades, int omniCount, int res, const ShadowCasterSet& casters)
@@ -334,10 +571,154 @@ void EngineVK::RenderShadowDepthScene(const float* lightVPs, const float* splitV
     if (numCascades > 4)
         numCascades = 4;
 
+    if (numCascades < 1 || res <= 0 || !lightVPs || !splitViewDist || !camFwd3)
+    {
+        _shadowMapActive = false;
+        return;
+    }
+
+    if (!_shadowTuning.enabled)
+    {
+        _shadowMapActive = false;
+        return;
+    }
+
+    _shadowMapActive = false;
+
     if (!EnsureShadowTarget(res, numCascades))
         return;
 
-    // TODO: implement rendering solid and alpha casters
+    if (!EnsureShadowSolidPipeline(_device, _shadowRenderPass, _shadowSolidVertexShader, _shadowSolidFragmentShader,
+                                   _shadowPipelineLayout, _shadowSolidPipeline, _shadowPipelineRenderPass))
+        return;
+
+    if (casters.alphaVertexCount > 0)
+        LOG_WARN(Graphics, "Vulkan: alpha shadow casters are not yet rendered; using solid caster pass only");
+
+    if (!casters.solidXYZ || casters.solidVertexCount < 3)
+    {
+        _shadowMapActive = false;
+        return;
+    }
+
+    const VkDeviceSize vertexBytes = static_cast<VkDeviceSize>(casters.solidVertexCount) * 3u * sizeof(float);
+    VkBuffer vertexBuffer = VK_NULL_HANDLE;
+    VmaAllocation vertexAllocation = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = vertexBytes;
+    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+    if (vmaCreateBuffer(_vmaAllocator, &bufferInfo, &allocInfo, &vertexBuffer, &vertexAllocation, nullptr) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: failed to allocate temporary shadow vertex buffer");
+        return;
+    }
+
+    void* mapped = nullptr;
+    if (vmaMapMemory(_vmaAllocator, vertexAllocation, &mapped) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: failed to map temporary shadow vertex buffer");
+        vmaDestroyBuffer(_vmaAllocator, vertexBuffer, vertexAllocation);
+        return;
+    }
+    std::memcpy(mapped, casters.solidXYZ, static_cast<size_t>(vertexBytes));
+    vmaUnmapMemory(_vmaAllocator, vertexAllocation);
+
+    VkCommandBufferAllocateInfo allocCb{};
+    allocCb.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocCb.commandPool = _commandPool;
+    allocCb.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocCb.commandBufferCount = 1;
+
+    VkCommandBuffer cb = VK_NULL_HANDLE;
+    if (vkAllocateCommandBuffers(_device, &allocCb, &cb) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: failed to allocate shadow command buffer");
+        vmaDestroyBuffer(_vmaAllocator, vertexBuffer, vertexAllocation);
+        return;
+    }
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    if (vkBeginCommandBuffer(cb, &beginInfo) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: failed to begin shadow command buffer");
+        vkFreeCommandBuffers(_device, _commandPool, 1, &cb);
+        vmaDestroyBuffer(_vmaAllocator, vertexBuffer, vertexAllocation);
+        return;
+    }
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(res);
+    viewport.height = static_cast<float>(res);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = {static_cast<uint32_t>(res), static_cast<uint32_t>(res)};
+
+    VkDeviceSize offset = 0;
+    for (int i = 0; i < numCascades; ++i)
+    {
+        VkClearValue clear{};
+        clear.depthStencil = {1.0f, 0};
+
+        VkRenderPassBeginInfo passInfo{};
+        passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        passInfo.renderPass = _shadowRenderPass;
+        passInfo.framebuffer = _shadowFramebuffers[i];
+        passInfo.renderArea.offset = {0, 0};
+        passInfo.renderArea.extent = {static_cast<uint32_t>(res), static_cast<uint32_t>(res)};
+        passInfo.clearValueCount = 1;
+        passInfo.pClearValues = &clear;
+
+        vkCmdBeginRenderPass(cb, &passInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdSetViewport(cb, 0, 1, &viewport);
+        vkCmdSetScissor(cb, 0, 1, &scissor);
+        vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowSolidPipeline);
+        vkCmdPushConstants(cb, _shadowPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           static_cast<uint32_t>(sizeof(float) * 16), lightVPs + i * 16);
+        vkCmdBindVertexBuffers(cb, 0, 1, &vertexBuffer, &offset);
+        vkCmdDraw(cb, casters.solidVertexCount, 1, 0, 0);
+        vkCmdEndRenderPass(cb);
+    }
+
+    if (vkEndCommandBuffer(cb) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: failed to end shadow command buffer");
+        vkFreeCommandBuffers(_device, _commandPool, 1, &cb);
+        vmaDestroyBuffer(_vmaAllocator, vertexBuffer, vertexAllocation);
+        return;
+    }
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cb;
+
+    if (vkQueueSubmit(_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: failed to submit shadow command buffer");
+        vkFreeCommandBuffers(_device, _commandPool, 1, &cb);
+        vmaDestroyBuffer(_vmaAllocator, vertexBuffer, vertexAllocation);
+        return;
+    }
+
+    vkQueueWaitIdle(_graphicsQueue);
+    vkFreeCommandBuffers(_device, _commandPool, 1, &cb);
+    vmaDestroyBuffer(_vmaAllocator, vertexBuffer, vertexAllocation);
+
     _shadowMapActive = true;
     _shadowMapRes = res;
     _shadowCascades = numCascades;

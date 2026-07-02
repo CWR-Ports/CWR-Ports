@@ -812,6 +812,28 @@ void EngineVK::DeinitPipelineLayouts()
 {
     LOG_INFO(Graphics, "Vulkan: Destroying Pipeline Layouts and Descriptor Set Layouts...");
     
+    if (_shadowSolidPipeline != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(_device, _shadowSolidPipeline, nullptr);
+        _shadowSolidPipeline = VK_NULL_HANDLE;
+    }
+    if (_shadowSolidVertexShader != VK_NULL_HANDLE)
+    {
+        vkDestroyShaderModule(_device, _shadowSolidVertexShader, nullptr);
+        _shadowSolidVertexShader = VK_NULL_HANDLE;
+    }
+    if (_shadowSolidFragmentShader != VK_NULL_HANDLE)
+    {
+        vkDestroyShaderModule(_device, _shadowSolidFragmentShader, nullptr);
+        _shadowSolidFragmentShader = VK_NULL_HANDLE;
+    }
+    if (_shadowPipelineLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(_device, _shadowPipelineLayout, nullptr);
+        _shadowPipelineLayout = VK_NULL_HANDLE;
+    }
+    _shadowPipelineRenderPass = VK_NULL_HANDLE;
+
     if (_pipelineLayout != VK_NULL_HANDLE)
     {
         vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
