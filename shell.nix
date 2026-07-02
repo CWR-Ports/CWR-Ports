@@ -37,12 +37,48 @@ pkgs.mkShell {
     pkgs.vulkan-loader
     pkgs.clang-tools
     pkgs.shaderc
+    
+    # Graphics and windowing dependencies
+    pkgs.wayland
+    pkgs.wayland-protocols
+    pkgs.libxkbcommon
+    pkgs.libx11
+    pkgs.libxcursor
+    pkgs.libxi
+    pkgs.libxrandr
+    pkgs.libxext
+    pkgs.libxtst
+    pkgs.libxfixes
+    pkgs.ibus
+    pkgs.dbus
+    pkgs.libdecor
+    
+    # Audio dependencies
+    pkgs.alsa-lib
+    pkgs.libpulseaudio
   ];
   
   ANDROID_HOME = "${androidEnv.androidsdk}/libexec/android-sdk";
   ANDROID_NDK_ROOT = "${androidEnv.androidsdk}/libexec/android-sdk/ndk/26.1.10909125";
   ANDROID_NDK_HOME = "${androidEnv.androidsdk}/libexec/android-sdk/ndk/26.1.10909125";
   VCPKG_FORCE_SYSTEM_BINARIES = "1";
-  LD_LIBRARY_PATH = "${pkgs.stdenv.cc.cc.lib}/lib";
+  LD_LIBRARY_PATH = "${pkgs.stdenv.cc.cc.lib}/lib:/run/opengl-driver/lib:${pkgs.lib.makeLibraryPath [
+    pkgs.libGL
+    pkgs.vulkan-loader
+    pkgs.wayland
+    pkgs.libxkbcommon
+    pkgs.libx11
+    pkgs.libxcursor
+    pkgs.libxi
+    pkgs.libxrandr
+    pkgs.libxext
+    pkgs.libxtst
+    pkgs.libxfixes
+    pkgs.ibus
+    pkgs.dbus
+    pkgs.libdecor
+    pkgs.alsa-lib
+    pkgs.libpulseaudio
+  ]}";
   hardeningDisable = [ "format" ];
 }
