@@ -35,7 +35,7 @@ static const char s_vsScreenGLSL[] = R"(#version 450
 precision highp float;
 precision highp int;
 
-layout(set = 0, binding = 0, std140) uniform VSConstants {
+layout(std140, set = 0, binding = 0) uniform VSConstants {
     mat4 _pad_proj;
     mat4 _pad_view;
     mat4 _pad_world;
@@ -85,7 +85,7 @@ static const char s_vsTransformGLSL[] = R"(#version 450
 precision highp float;
 precision highp int;
 
-layout(set = 0, binding = 0, std140) uniform VSConstants {
+layout(std140, set = 0, binding = 0) uniform VSConstants {
     mat4 proj;
     mat4 view;
     mat4 world;
@@ -112,7 +112,7 @@ layout(set = 0, binding = 0, std140) uniform VSConstants {
     mat4 lightVP;
 };
 
-layout(set = 0, binding = 1, std140) uniform WorldInstances {
+layout(std140, set = 0, binding = 1) uniform WorldInstances {
     mat4 worldArr[256];
 };
 
@@ -128,8 +128,8 @@ layout(location = 4) out float vFogTC;
 layout(location = 5) out vec3 vWorldRel;
 
 void main() {
-    vec4 worldPos    = worldArr[gl_InstanceID] * vec4(pos, 1.0);
-    vec3 worldNormal = normalize(mat3(worldArr[gl_InstanceID]) * normal);
+    vec4 worldPos    = worldArr[gl_InstanceIndex] * vec4(pos, 1.0);
+    vec3 worldNormal = normalize(mat3(worldArr[gl_InstanceIndex]) * normal);
     vec4 viewPos     = view * worldPos;
     gl_Position      = proj * viewPos;
     vWorldRel        = worldPos.xyz;
@@ -204,7 +204,7 @@ static const char s_vsShadowGLSL[] = R"(#version 450
 precision highp float;
 precision highp int;
 
-layout(set = 0, binding = 0, std140) uniform VSConstants {
+layout(std140, set = 0, binding = 0) uniform VSConstants {
     mat4 proj;
     mat4 view;
     mat4 world;
@@ -225,7 +225,7 @@ layout(set = 0, binding = 0, std140) uniform VSConstants {
     vec4 texCtrl;
 };
 
-layout(set = 0, binding = 1, std140) uniform WorldInstances {
+layout(std140, set = 0, binding = 1) uniform WorldInstances {
     mat4 worldArr[256];
 };
 
@@ -241,7 +241,7 @@ layout(location = 4) out float vFogTC;
 layout(location = 5) out vec3 vWorldRel;
 
 void main() {
-    vec4 worldPos = worldArr[gl_InstanceID] * vec4(pos, 1.0);
+    vec4 worldPos = worldArr[gl_InstanceIndex] * vec4(pos, 1.0);
     gl_Position   = proj * view * worldPos;
     vColor        = diffuse;
     vSpecColor    = vec4(0.0);
@@ -257,7 +257,7 @@ static const char s_psNormalGLSL[] = R"(#version 450
 precision highp float;
 precision highp int;
 
-layout(set = 0, binding = 2, std140) uniform PSConstants {
+layout(std140, set = 0, binding = 2) uniform PSConstants {
     vec4 fogColor;
     vec4 alphaRef;
     vec4 shadowCtl;
@@ -272,8 +272,8 @@ layout(set = 0, binding = 2, std140) uniform PSConstants {
     vec4 camFwd;
 };
 
-layout(binding = 3) uniform sampler2D tex0;
-layout(binding = 5) uniform sampler2DArray shadowMap;
+layout(set = 1, binding = 0) uniform sampler2D tex0;
+layout(set = 1, binding = 2) uniform sampler2DArray shadowMap;
 
 layout(location = 0) in vec4 vColor;
 layout(location = 1) in vec4 vSpecColor;
@@ -356,7 +356,7 @@ static const char s_psDetailGLSL[] = R"(#version 450
 precision highp float;
 precision highp int;
 
-layout(set = 0, binding = 2, std140) uniform PSConstants {
+layout(std140, set = 0, binding = 2) uniform PSConstants {
     vec4 fogColor;
     vec4 alphaRef;
     vec4 shadowCtl;
@@ -371,9 +371,9 @@ layout(set = 0, binding = 2, std140) uniform PSConstants {
     vec4 camFwd;
 };
 
-layout(binding = 3) uniform sampler2D tex0;
-layout(binding = 4) uniform sampler2D tex1;
-layout(binding = 5) uniform sampler2DArray shadowMap;
+layout(set = 1, binding = 0) uniform sampler2D tex0;
+layout(set = 1, binding = 1) uniform sampler2D tex1;
+layout(set = 1, binding = 2) uniform sampler2DArray shadowMap;
 
 layout(location = 0) in vec4 vColor;
 layout(location = 1) in vec4 vSpecColor;
@@ -459,7 +459,7 @@ static const char s_psGrassGLSL[] = R"(#version 450
 precision highp float;
 precision highp int;
 
-layout(set = 0, binding = 2, std140) uniform PSConstants {
+layout(std140, set = 0, binding = 2) uniform PSConstants {
     vec4 fogColor;
     vec4 alphaRef;
     vec4 shadowCtl;
@@ -474,9 +474,9 @@ layout(set = 0, binding = 2, std140) uniform PSConstants {
     vec4 camFwd;
 };
 
-layout(binding = 3) uniform sampler2D tex0;
-layout(binding = 4) uniform sampler2D tex1;
-layout(binding = 5) uniform sampler2DArray shadowMap;
+layout(set = 1, binding = 0) uniform sampler2D tex0;
+layout(set = 1, binding = 1) uniform sampler2D tex1;
+layout(set = 1, binding = 2) uniform sampler2DArray shadowMap;
 
 layout(location = 0) in vec4 vColor;
 layout(location = 1) in vec4 vSpecColor;
@@ -561,7 +561,7 @@ static const char s_psWaterGLSL[] = R"(#version 450
 precision highp float;
 precision highp int;
 
-layout(set = 0, binding = 2, std140) uniform PSConstants {
+layout(std140, set = 0, binding = 2) uniform PSConstants {
     vec4 fogColor;
     vec4 alphaRef;
     vec4 shadowCtl;
@@ -572,8 +572,8 @@ layout(set = 0, binding = 2, std140) uniform PSConstants {
     vec4 rgbEyeCoef;
 };
 
-layout(binding = 3) uniform sampler2D tex0;
-layout(binding = 4) uniform sampler2D tex1;
+layout(set = 1, binding = 0) uniform sampler2D tex0;
+layout(set = 1, binding = 1) uniform sampler2D tex1;
 
 layout(location = 0) in vec4 vColor;
 layout(location = 1) in vec4 vSpecColor;
@@ -601,7 +601,7 @@ static const char s_psShadowGLSL[] = R"(#version 450
 precision highp float;
 precision highp int;
 
-layout(set = 0, binding = 2, std140) uniform PSConstants {
+layout(std140, set = 0, binding = 2) uniform PSConstants {
     vec4 fogColor;
     vec4 alphaRef;
     vec4 shadowCtl;
@@ -612,7 +612,7 @@ layout(set = 0, binding = 2, std140) uniform PSConstants {
     vec4 rgbEyeCoef;
 };
 
-layout(binding = 3) uniform sampler2D tex0;
+layout(set = 1, binding = 0) uniform sampler2D tex0;
 
 layout(location = 0) in vec4 vColor;
 layout(location = 2) in vec2 vUV0;
@@ -731,6 +731,103 @@ void EngineVK::DeinitShaders()
             vkDestroyShaderModule(_device, _fsModules[i], nullptr);
             _fsModules[i] = VK_NULL_HANDLE;
         }
+    }
+}
+
+void EngineVK::InitPipelineLayouts()
+{
+    LOG_INFO(Graphics, "Vulkan: Initializing Descriptor Set Layouts and Pipeline Layouts...");
+    
+    // Globals
+    VkDescriptorSetLayoutBinding globalBindings[3] = {};
+    
+    globalBindings[0].binding = 0;
+    globalBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    globalBindings[0].descriptorCount = 1;
+    globalBindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    
+    globalBindings[1].binding = 1;
+    globalBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    globalBindings[1].descriptorCount = 1;
+    globalBindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    
+    globalBindings[2].binding = 2;
+    globalBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    globalBindings[2].descriptorCount = 1;
+    globalBindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    
+    VkDescriptorSetLayoutCreateInfo globalLayoutInfo{};
+    globalLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    globalLayoutInfo.bindingCount = 3;
+    globalLayoutInfo.pBindings = globalBindings;
+    
+    if (vkCreateDescriptorSetLayout(_device, &globalLayoutInfo, nullptr, &_descriptorSetLayoutGlobals) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: Failed to create global descriptor set layout!");
+    }
+    
+    // Material
+    VkDescriptorSetLayoutBinding materialBindings[3] = {};
+    
+    materialBindings[0].binding = 0;
+    materialBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    materialBindings[0].descriptorCount = 1;
+    materialBindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    
+    materialBindings[1].binding = 1;
+    materialBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    materialBindings[1].descriptorCount = 1;
+    materialBindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    
+    materialBindings[2].binding = 2;
+    materialBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    materialBindings[2].descriptorCount = 1;
+    materialBindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    
+    VkDescriptorSetLayoutCreateInfo materialLayoutInfo{};
+    materialLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    materialLayoutInfo.bindingCount = 3;
+    materialLayoutInfo.pBindings = materialBindings;
+    
+    if (vkCreateDescriptorSetLayout(_device, &materialLayoutInfo, nullptr, &_descriptorSetLayoutMaterial) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: Failed to create material descriptor set layout!");
+    }
+    
+    // Pipeline Layout
+    VkDescriptorSetLayout setLayouts[] = { _descriptorSetLayoutGlobals, _descriptorSetLayoutMaterial };
+    
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 2;
+    pipelineLayoutInfo.pSetLayouts = setLayouts;
+    
+    if (vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_pipelineLayout) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "Vulkan: Failed to create pipeline layout!");
+    }
+}
+
+void EngineVK::DeinitPipelineLayouts()
+{
+    LOG_INFO(Graphics, "Vulkan: Destroying Pipeline Layouts and Descriptor Set Layouts...");
+    
+    if (_pipelineLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
+        _pipelineLayout = VK_NULL_HANDLE;
+    }
+    
+    if (_descriptorSetLayoutGlobals != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(_device, _descriptorSetLayoutGlobals, nullptr);
+        _descriptorSetLayoutGlobals = VK_NULL_HANDLE;
+    }
+    
+    if (_descriptorSetLayoutMaterial != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(_device, _descriptorSetLayoutMaterial, nullptr);
+        _descriptorSetLayoutMaterial = VK_NULL_HANDLE;
     }
 }
 

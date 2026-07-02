@@ -36,6 +36,7 @@ pkgs.mkShell {
     pkgs.vulkan-headers
     pkgs.vulkan-loader
     pkgs.clang-tools
+    pkgs.shaderc
   ];
   
   ANDROID_HOME = "${androidEnv.androidsdk}/libexec/android-sdk";

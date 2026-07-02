@@ -110,6 +110,10 @@ protected:
 
     VkShaderModule _vsModules[NVertexShaders] = { VK_NULL_HANDLE };
     VkShaderModule _fsModules[NPixelShaders] = { VK_NULL_HANDLE };
+    
+    VkDescriptorSetLayout _descriptorSetLayoutGlobals = VK_NULL_HANDLE; // Set 0: UBOs
+    VkDescriptorSetLayout _descriptorSetLayoutMaterial = VK_NULL_HANDLE; // Set 1: Textures
+    VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
 
     TextBankVK* _textBank = nullptr;
 
@@ -233,6 +237,9 @@ public:
 private:
     void InitShaders();
     void DeinitShaders();
+    
+    void InitPipelineLayouts();
+    void DeinitPipelineLayouts();
 
     void InitVulkan();
     void ShutdownVulkan();

@@ -48,6 +48,7 @@ EngineVK::EngineVK(int width, int height, bool windowed, int bpp)
 
     InitVulkan();
     InitShaders();
+    InitPipelineLayouts();
 }
 
 EngineVK::~EngineVK()
@@ -57,6 +58,7 @@ EngineVK::~EngineVK()
     delete _textBank;
     _textBank = nullptr;
 
+    DeinitPipelineLayouts();
     DeinitShaders();
     ShutdownVulkan();
 }
