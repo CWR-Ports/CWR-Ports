@@ -82,3 +82,6 @@ android/.gradle/
 test.cpp
 android/app/.cxx/
 android/build/
+
+# vscode
+.vscode/
