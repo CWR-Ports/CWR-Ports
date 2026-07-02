@@ -3,12 +3,16 @@ file(GLOB_RECURSE POSEIDON_VK_SOURCES CONFIGURE_DEPENDS
 )
 
 set(POSEIDON_VK_HEADERS
-    ${CMAKE_CURRENT_SOURCE_DIR}/EngineVK.hpp
+    EngineVK_Lifecycle.cpp
+    EngineVK_Material.cpp
+    EngineVK_State.cpp
+    EngineVK_Shaders.cpp
 )
 
 add_library(PoseidonVK STATIC
     ${POSEIDON_VK_SOURCES}
     ${POSEIDON_VK_HEADERS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/EngineVK.hpp
     GraphicsBackendVK.cpp
 )
 

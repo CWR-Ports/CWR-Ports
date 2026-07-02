@@ -22,6 +22,7 @@
 using namespace Poseidon;
 
 typedef struct VmaAllocator_T* VmaAllocator;
+typedef struct VmaAllocation_T* VmaAllocation;
 
 #include <Poseidon/Graphics/Rendering/RenderPassDescriptor.hpp>
 #include <unordered_map>
@@ -58,6 +59,58 @@ struct PipelineKeyHash
 
 class EngineVK;
 
+// max number of local lights processed per vertex shader invocation
+constexpr int MaxLocalLights = 8;
+
+struct VSConstants
+{
+    float proj[16];
+    float view[16];
+    float world[16];
+    float sunDir[4];
+    float ambient[4];
+    float diffuse[4];
+    float emissive[4];
+    float fogParam[4];
+    float camPos[4];
+    float specular[4];
+    float specEn[4];
+    float sunEn[4];
+    float vpScale[4];
+    float _pad22[4];
+    float _pad23[4];
+    float texMat0[16];
+    float texMat1[16];
+    float texCtrl[4];
+    float lightCount[4];
+    float lightPos[MaxLocalLights][4];
+    float lightDiffuse[MaxLocalLights][4];
+    float lightAmbient[MaxLocalLights][4];
+    float localLightDir[MaxLocalLights][4];
+    float lightVP[16];
+};
+
+struct WorldInstances
+{
+    float worldArr[256][16];
+};
+
+struct PSConstants
+{
+    float fogColor[4];
+    float alphaRef[4];
+    float shadowCtl[4];
+    float constColor[4];
+    float _pad4[4];
+    float _pad5[4];
+    float _pad6[4];
+    float rgbEyeCoef[4];
+    float cascadeVP[4][16];
+    float cascadeSplits[4];
+    float cascadeCtl[4];
+    float camFwd[4];
+};
+
 struct SVertex
 {
     Vector3P pos;
@@ -65,7 +118,7 @@ struct SVertex
     Poseidon::UVPair t0;
 };
 
-// entry-point creator for GraphicsEngineFactory
+// entry-point creator for graphicsenginefactory
 Engine* CreateEngineVK(int width, int height, bool windowed, int bpp);
 
 enum VertexShaderID
@@ -140,11 +193,26 @@ protected:
     VkShaderModule _vsModules[NVertexShaders] = { VK_NULL_HANDLE };
     VkShaderModule _fsModules[NPixelShaders] = { VK_NULL_HANDLE };
     
-    VkDescriptorSetLayout _descriptorSetLayoutGlobals = VK_NULL_HANDLE; // Set 0: UBOs
-    VkDescriptorSetLayout _descriptorSetLayoutMaterial = VK_NULL_HANDLE; // Set 1: Textures
+    VkDescriptorSetLayout _descriptorSetLayoutGlobals = VK_NULL_HANDLE; // set 0 ubos
+    VkDescriptorSetLayout _descriptorSetLayoutMaterial = VK_NULL_HANDLE; // set 1 textures
     VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
     
     std::unordered_map<PipelineKey, VkPipeline, PipelineKeyHash> _pipelineCache;
+
+    // active ubo structs populated by setmaterial and updateprojection
+    VSConstants _vsConstants = {};
+    WorldInstances _worldInstances = {};
+    PSConstants _psConstants = {};
+    
+    // dynamic uniform buffer for ubos
+    VkBuffer _uniformBuffer = VK_NULL_HANDLE;
+    VmaAllocation _uniformAllocation = VK_NULL_HANDLE;
+    void* _uniformMapped = nullptr;
+    uint32_t _uniformOffset = 0;
+    
+    // default descriptor set
+    VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
+    VkDescriptorSet _globalDescriptorSet = VK_NULL_HANDLE;
 
     TextBankVK* _textBank = nullptr;
 
@@ -178,6 +246,15 @@ public:
 
     bool SwitchRes(int w, int h, int bpp) override;
     bool SwitchRefreshRate(int refresh) override;
+
+    void EnableSunLight(bool enable) override;
+    void SetMaterial(const Poseidon::TLMaterial& mat, const LightList& lights, const Poseidon::render::LegacySpec& spec) override;
+    void UpdateProjection() override {}
+    
+    // overrides needed for draw
+    void SetGrassParams(float a1, float a2, float a3 = 0, float a4 = 0) override {}
+    void SetShadowMapsEnabled(bool enabled) override {}
+    bool ShadowMapsEnabled() const override { return false; }
     bool SetWindowMode(Poseidon::WindowMode mode) override;
     Poseidon::WindowMode GetCurrentWindowMode() const override;
     void OnWindowResized(int w, int h) override;

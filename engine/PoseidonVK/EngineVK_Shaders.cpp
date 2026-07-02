@@ -742,17 +742,17 @@ void EngineVK::InitPipelineLayouts()
     VkDescriptorSetLayoutBinding globalBindings[3] = {};
     
     globalBindings[0].binding = 0;
-    globalBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    globalBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     globalBindings[0].descriptorCount = 1;
     globalBindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     
     globalBindings[1].binding = 1;
-    globalBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    globalBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     globalBindings[1].descriptorCount = 1;
     globalBindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     
     globalBindings[2].binding = 2;
-    globalBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    globalBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     globalBindings[2].descriptorCount = 1;
     globalBindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     
