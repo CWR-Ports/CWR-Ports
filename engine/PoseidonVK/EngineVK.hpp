@@ -171,6 +171,10 @@ protected:
     VkCommandPool _commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> _commandBuffers;
 
+    // registry for VertexBufferVK mapping from MeshHandle.vao ID
+    uint32_t _nextVboId = 1;
+    std::unordered_map<uint32_t, VertexBufferVK*> _vboRegistry;
+
     std::vector<VkImage> _swapchainImages;
     std::vector<VkImageView> _swapchainImageViews;
     std::vector<VkFramebuffer> _swapchainFramebuffers;
@@ -238,6 +242,11 @@ public:
     void InitDraw(bool clear = false, PackedColor color = PackedColor(0)) override;
     void FinishDraw() override;
     void NextFrame() override;
+
+    void RegisterVertexBuffer(VertexBufferVK* buf, uint32_t& id);
+    void UnregisterVertexBuffer(uint32_t id);
+    VertexBufferVK* GetVertexBuffer(uint32_t id);
+
     void DrawTestPattern(const char* name) override;
 
     void Pause() override;

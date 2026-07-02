@@ -21,8 +21,11 @@ class VertexBufferVK : public VertexBuffer
     friend class EngineVK;
 
   private:
+    EngineVK* _engine = nullptr;
     VmaAllocator _allocator = VK_NULL_HANDLE;
     
+    uint32_t _vao = 0; // ID for backendMeshHandle registry
+
     VkBuffer _vbo = VK_NULL_HANDLE;
     VmaAllocation _vboAllocation = VK_NULL_HANDLE;
     
@@ -36,7 +39,7 @@ class VertexBufferVK : public VertexBuffer
     AutoArray<VBSectionInfoVK> _sections;
 
   public:
-    VertexBufferVK(VmaAllocator allocator);
+    VertexBufferVK(EngineVK* engine, VmaAllocator allocator);
     ~VertexBufferVK() override;
 
     bool Init(const Shape& src, VBType type);

@@ -430,41 +430,4 @@ bool EngineVK::IsMouseGrabbed() const
     return false;
 }
 
-void EngineVK::EmitDraw(const render::frame::Draw& d)
-{
-    if (!_vkReady || !_frameOpen) return;
-
-    PipelineKey key;
-    key.desc = d.descriptor;
-    // for now, assume Mesh draws (like models) use SVertex (format 1),
-    // and UI/Screen space uses TLVertex (format 0).
-    // in Poseidon, EmitDraw is only used by the frame layer which generally handles Mesh/3D things.
-    // if it's a 3D pass, it's format 1. 
-    key.vertexFormat = (d.descriptor.pass == render::PassKind::ScreenSpace3D) ? 0 : 1; 
-
-    VkPipeline pipeline = GetOrCreatePipeline(key);
-    if (pipeline == VK_NULL_HANDLE)
-        return;
-
-    VkCommandBuffer cb = _commandBuffers[_currentFrame];
-    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-
-    // apply dynamic states (Viewport, Scissor)
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = static_cast<float>(_h); // flipped Y for Vulkan to match d3d11/opengl convention
-    viewport.width = static_cast<float>(_w);
-    viewport.height = -static_cast<float>(_h);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(cb, 0, 1, &viewport);
-
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = _swapchainExtent;
-    vkCmdSetScissor(cb, 0, 1, &scissor);
-
-    // we still need to bind Descriptor Sets and Vertex/Index buffers.
-    // for now though, validating the pipeline creation and binding is the primary goal.
-}
 } // namespace Poseidon

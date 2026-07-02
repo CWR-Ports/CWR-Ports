@@ -5,13 +5,16 @@
 namespace Poseidon
 {
 
-VertexBufferVK::VertexBufferVK(VmaAllocator allocator)
-    : _allocator(allocator)
+VertexBufferVK::VertexBufferVK(EngineVK* engine, VmaAllocator allocator)
+    : _engine(engine), _allocator(allocator)
 {
 }
 
 VertexBufferVK::~VertexBufferVK()
 {
+    if (_engine && _vao > 0)
+        _engine->UnregisterVertexBuffer(_vao);
+
     if (_ibo)
         vmaDestroyBuffer(_allocator, _ibo, _iboAllocation);
     if (_vbo)
@@ -162,9 +165,12 @@ void VertexBufferVK::Update(const Shape& src, bool dynamic)
 
 VertexBuffer* EngineVK::CreateVertexBuffer(const Shape& src, VBType type)
 {
-    auto* buf = new VertexBufferVK(_vmaAllocator);
+    auto* buf = new VertexBufferVK(this, _vmaAllocator);
     if (buf->Init(src, type))
+    {
+        RegisterVertexBuffer(buf, buf->_vao);
         return buf;
+    }
     delete buf;
     return nullptr;
 }
@@ -172,6 +178,25 @@ VertexBuffer* EngineVK::CreateVertexBuffer(const Shape& src, VBType type)
 int EngineVK::CompareBuffers(const Shape&, const Shape&)
 {
     return 0;
+}
+
+void EngineVK::RegisterVertexBuffer(VertexBufferVK* buf, uint32_t& id)
+{
+    id = _nextVboId++;
+    _vboRegistry[id] = buf;
+}
+
+void EngineVK::UnregisterVertexBuffer(uint32_t id)
+{
+    _vboRegistry.erase(id);
+}
+
+VertexBufferVK* EngineVK::GetVertexBuffer(uint32_t id)
+{
+    auto it = _vboRegistry.find(id);
+    if (it != _vboRegistry.end())
+        return it->second;
+    return nullptr;
 }
 
 } // namespace Poseidon
