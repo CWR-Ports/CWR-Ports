@@ -77,6 +77,22 @@ protected:
     VkCommandPool _commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> _commandBuffers;
 
+    std::vector<VkImage> _swapchainImages;
+    std::vector<VkImageView> _swapchainImageViews;
+    std::vector<VkFramebuffer> _swapchainFramebuffers;
+    VkFormat _swapchainFormat = VK_FORMAT_UNDEFINED;
+    VkExtent2D _swapchainExtent = {0, 0};
+
+    static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+    std::vector<VkSemaphore> _imageAvailableSem;
+    std::vector<VkSemaphore> _renderFinishedSem;
+    std::vector<VkFence> _inFlightFences;
+    uint32_t _currentFrame = 0;
+
+    int _queueFamilyIndices[2] = {-1, -1};
+    VkDebugUtilsMessengerEXT _debugMessenger = VK_NULL_HANDLE;
+    bool _vkReady = false;
+
     VkShaderModule _vsModules[NVertexShaders] = { VK_NULL_HANDLE };
     VkShaderModule _fsModules[NPixelShaders] = { VK_NULL_HANDLE };
 
@@ -197,6 +213,18 @@ public:
 private:
     void InitShaders();
     void DeinitShaders();
+
+    void InitVulkan();
+    void ShutdownVulkan();
+    bool CreateVkInstance();
+    bool CreateVkSurface();
+    bool PickPhysicalDevice();
+    bool CreateLogicalDevice();
+    bool CreateSwapchain();
+    bool CreateRenderPass();
+    bool CreateFramebuffers();
+    bool CreateCommandPool();
+    bool CreateSyncObjects();
 };
 }
 

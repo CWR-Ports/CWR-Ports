@@ -40,16 +40,18 @@ EngineVK::EngineVK(int width, int height, bool windowed, int bpp)
     _minGuardY = 0;
     _maxGuardY = _h;
 
-    LOG_INFO(Graphics, "PoseidonVK: Initializing stub Vulkan engine ({}x{} {}bpp)", _w, _h, _pixelSize);
-    
+    LOG_INFO(Graphics, "PoseidonVK: Initializing Vulkan engine ({}x{} {}bpp)", _w, _h, _pixelSize);
+
+    InitVulkan();
     InitShaders();
 }
 
 EngineVK::~EngineVK()
 {
     LOG_INFO(Graphics, "PoseidonVK: Destroying Vulkan engine");
-    
+
     DeinitShaders();
+    ShutdownVulkan();
 }
 
 bool EngineVK::InitDrawDone()
