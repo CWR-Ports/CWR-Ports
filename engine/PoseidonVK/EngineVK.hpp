@@ -388,6 +388,7 @@ public:
     ShadowMapTuning GetShadowMapTuning() const override;
     void SetShadowMapTuning(const ShadowMapTuning& tuning) override;
     void RenderShadowDepthScene(const float* lightVPs, const float* splitViewDist, const float* camFwd3, int numCascades, int omniCount, int res, const ShadowCasterSet& casters) override;
+    void UpdateShadowMapLitState();
     bool DumpShadowMap(const char* path) override;
     bool SetWindowMode(Poseidon::WindowMode mode) override;
     Poseidon::WindowMode GetCurrentWindowMode() const override;

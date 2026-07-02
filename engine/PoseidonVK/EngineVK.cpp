@@ -306,58 +306,6 @@ void EngineVK::Clear(bool clearZ, bool clear, PackedColor color)
 {
 }
 
-void EngineVK::DrawDecal(Vector3Par pos, float rhw, float sizeX, float sizeY, PackedColor col, const MipInfo& mip, int specFlags)
-{
-}
-
-void EngineVK::DrawPolygon(const VertexIndex* i, int n)
-{
-}
-
-void EngineVK::DrawSection(const FaceArray& face, Offset beg, Offset end)
-{
-}
-
-void EngineVK::DrawPoints(int beg, int end)
-{
-}
-
-void EngineVK::Draw2D(const Draw2DPars& pars, const Rect2DAbs& rect, const Rect2DAbs& clip)
-{
-}
-
-void EngineVK::DrawPoly(const MipInfo& mip, const Vertex2DAbs* vertices, int nVertices, const Rect2DAbs& clip, int specFlags)
-{
-}
-
-void EngineVK::DrawPoly(const MipInfo& mip, const Vertex2DPixel* vertices, int nVertices, const Rect2DPixel& clip, int specFlags)
-{
-}
-
-void EngineVK::DrawLine(const Line2DAbs& rect, PackedColor c0, PackedColor c1, const Rect2DAbs& clip)
-{
-}
-
-void EngineVK::DrawLine(int beg, int end)
-{
-}
-
-void EngineVK::PrepareMesh(const render::LegacySpec& spec)
-{
-}
-
-void EngineVK::BeginMesh(TLVertexTable& mesh, const render::LegacySpec& spec)
-{
-}
-
-void EngineVK::EndMesh(TLVertexTable& mesh)
-{
-}
-
-void EngineVK::PrepareTriangle(const MipInfo& mip, int specFlags)
-{
-}
-
 void EngineVK::FogColorChanged(ColorVal fogColor)
 {
 }

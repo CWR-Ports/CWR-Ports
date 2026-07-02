@@ -737,9 +737,47 @@ void EngineVK::RenderShadowDepthScene(const float* lightVPs, const float* splitV
     _shadowCamFwd[2] = camFwd3[2];
 }
 
+void EngineVK::UpdateShadowMapLitState()
+{
+    // populate PS constants for the lit fragment shader to sample the shadow depth array
+    // shadowCtl: {enable, 0, darkness, texelSize}
+    // cascadeVP: 4x mat4 light view-projection matrices
+    // cascadeSplits: per-tier selection distances
+    // cascadeCtl: {count, fadeRange, biasBase, omniCount}
+    // camFwd: camera forward direction
+
+    float ctl[4] = {0.0f, 0.0f, 1.0f, 0.0f};
+    float splits[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float cascadeCtl[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float camFwd[4] = {0.0f, 0.0f, 1.0f, 0.0f};
+
+    if (_shadowTuning.enabled && _shadowMapActive && _shadowCascades > 0)
+    {
+        ctl[0] = 1.0f;
+        ctl[2] = 1.0f - _shadowSunFactor * (1.0f - _shadowTuning.darkness);
+        ctl[3] = (_shadowMapRes > 0) ? (1.0f / static_cast<float>(_shadowMapRes)) : 0.0f;
+        cascadeCtl[0] = static_cast<float>(_shadowCascades);
+        cascadeCtl[1] = _shadowTuning.fadeRange;
+        cascadeCtl[2] = _shadowTuning.biasBase;
+        cascadeCtl[3] = static_cast<float>(_shadowOmniCount);
+        for (int i = 0; i < _shadowCascades && i < 4; i++)
+            splits[i] = _shadowSplits[i];
+        camFwd[0] = _shadowCamFwd[0];
+        camFwd[1] = _shadowCamFwd[1];
+        camFwd[2] = _shadowCamFwd[2];
+        std::memcpy(_psConstants.cascadeVP, _shadowMapVP, sizeof(float) * 16 * _shadowCascades);
+    }
+
+    std::memcpy(_psConstants.shadowCtl, ctl, 16);
+    std::memcpy(_psConstants.cascadeSplits, splits, 16);
+    std::memcpy(_psConstants.cascadeCtl, cascadeCtl, 16);
+    std::memcpy(_psConstants.camFwd, camFwd, 16);
+}
+
 bool EngineVK::DumpShadowMap(const char* path)
 {
     return false;
 }
 
 } // namespace Poseidon
+

@@ -583,6 +583,29 @@ void EngineVK::ShutdownVulkan()
     for (auto iv : _swapchainImageViews)
         vkDestroyImageView(_device, iv, nullptr);
 
+    // shadow pipeline cleanup
+    if (_shadowSolidPipeline != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(_device, _shadowSolidPipeline, nullptr);
+        _shadowSolidPipeline = VK_NULL_HANDLE;
+    }
+    if (_shadowPipelineLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(_device, _shadowPipelineLayout, nullptr);
+        _shadowPipelineLayout = VK_NULL_HANDLE;
+    }
+    if (_shadowSolidVertexShader != VK_NULL_HANDLE)
+    {
+        vkDestroyShaderModule(_device, _shadowSolidVertexShader, nullptr);
+        _shadowSolidVertexShader = VK_NULL_HANDLE;
+    }
+    if (_shadowSolidFragmentShader != VK_NULL_HANDLE)
+    {
+        vkDestroyShaderModule(_device, _shadowSolidFragmentShader, nullptr);
+        _shadowSolidFragmentShader = VK_NULL_HANDLE;
+    }
+    _shadowPipelineRenderPass = VK_NULL_HANDLE;
+
     // shadow map cleanup
     if (!_shadowLayerViews.empty())
     {
