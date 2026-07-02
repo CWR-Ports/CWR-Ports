@@ -142,6 +142,41 @@ enum PixelShaderID
     PSNone = NPixelShaders
 };
 
+struct TriQueue
+{
+    StaticArray<WORD> _triangleQueue;
+    TextureVK* _texture;
+    int _level;
+    int _special;
+    Poseidon::PassId _passId = Poseidon::PassId::Opaque;
+    int _lastUsed;
+};
+
+enum
+{
+    MaxTriQueues = 32,
+    TriQueueSize = 2048
+};
+
+struct QueueVK
+{
+    int _vertexBufferUsed;
+    int _indexBufferUsed;
+    int _meshBase, _meshSize;
+
+    TriQueue _tri[MaxTriQueues];
+    bool _triUsed[MaxTriQueues];
+    int _actTri;
+
+    int _usedCounter;
+    bool _firstVertex;
+    bool _firstIndex;
+
+    QueueVK();
+    int Allocate(TextureVK* tex, int level, int spec, int minI, int maxI, int tip);
+    void Free(int i);
+};
+
 class EngineVK : public Engine
 {
     typedef Engine base;
@@ -232,6 +267,63 @@ protected:
     int _minGuardY = 0;
     int _maxGuardY = 0;
 
+    QueueVK _queueNo;
+    std::vector<TLVertex> _vboMirror;
+    int _vboUploadedVerts = 0;
+    bool _enableReorder = true;
+    int _dbgQueueFanCalls = 0;
+    int _dbgTotalFanTris = 0;
+    int _dbgAddVerticesCalls = 0;
+    int _dbgTotalVertices = 0;
+    int _prepSpec = 0;
+    TLVertexTable* _mesh = nullptr;
+
+    enum RenderMode
+    {
+        RMUnknown,
+        RM2DTris,
+        RMTris,
+        RMLines
+    };
+    RenderMode _renderMode = RMTris;
+    void SwitchRenderMode(RenderMode mode)
+    {
+        if (_renderMode == mode)
+            return;
+        DoSwitchRenderMode(mode);
+    }
+    void DoSwitchRenderMode(RenderMode mode);
+    
+    void BeginPass(Poseidon::PassId passId);
+    void BeginScreenPass();
+    void DiscardVB();
+    void AddVertices(const TLVertex* v, int n);
+    void UploadPendingVertices();
+    enum class PipelineVertexInput
+    {
+        ActivePass,
+        Screen,
+        Mesh
+    };
+    PipelineVertexInput _pipelineVertexInput = PipelineVertexInput::ActivePass;
+
+    void ApplyPassState(TextureVK* tex, int level, const Poseidon::render::LegacySpec& spec, Poseidon::PassId passId, PipelineVertexInput vertexInput);
+
+    WORD* QueueAdd(QueueVK& queue, int n);
+    void QueueFan(const VertexIndex* ii, int n);
+    void Queue2DPoly(const TLVertex* v, int n);
+    void FlushQueue(QueueVK& queue, int index);
+    void FlushAndFreeQueue(QueueVK& queue, int index);
+    int AllocateQueue(QueueVK& queue, TextureVK* tex, int level, int spec);
+    void FreeQueue(QueueVK& queue, int index);
+    void FreeAllQueues(QueueVK& queue);
+    void FlushAndFreeAllQueues(QueueVK& queue, bool nonEmptyOnly = false);
+    void FlushAllQueues(QueueVK& queue, int skip = -1);
+    void CloseAllQueues(QueueVK& queue);
+    void QueuePrepareTriangle(const Poseidon::MipInfo& absMip, int specFlags);
+    void FlushQueues() override;
+    void EnableReorderQueues(bool enableReorder) override;
+
 public:
     EngineVK(int width, int height, bool windowed, int bpp);
     ~EngineVK() override;
@@ -312,6 +404,8 @@ public:
     void DrawPolygon(const VertexIndex* i, int n) override;
     void DrawSection(const FaceArray& face, Offset beg, Offset end) override;
     void DrawPoints(int beg, int end) override;
+    void DrawPoints(const TLVertex* vs, int nVertex);
+    bool CanGrass() const override;
 
     void Draw2D(const Draw2DPars& pars, const Rect2DAbs& rect, const Rect2DAbs& clip = Rect2DClipAbs) override;
     void DrawPoly(const MipInfo& mip, const Vertex2DAbs* vertices, int nVertices, const Rect2DAbs& clip = Rect2DClipAbs, int specFlags = DefSpecFlags2D) override;
@@ -324,6 +418,14 @@ public:
     void BeginMesh(TLVertexTable& mesh, const render::LegacySpec& spec) override;
     void EndMesh(TLVertexTable& mesh) override;
     void PrepareTriangle(const MipInfo& mip, int specFlags) override;
+    void PrepareTriangleTL(const Poseidon::MipInfo& mip, const Poseidon::render::LegacySpec& spec) override;
+    
+    bool InstancedRunAdd(const Matrix4& modelToWorld) override;
+    void BeginInstancedRunUpload() override;
+    void PrepareMeshTL(const LightList& lights, const Matrix4& modelToWorld, const Poseidon::render::LegacySpec& spec) override;
+    void PrepareMeshTLImpl(const FrameState& frame, const Matrix4& modelToWorld, const Poseidon::render::LegacySpec& spec);
+    void BeginMeshTL(const Shape& sMesh, int spec, bool dynamic) override;
+    void EndMeshTL(const Shape& sMesh) override;
 
     /// settings & states ///
     void FogColorChanged(ColorVal fogColor) override;
