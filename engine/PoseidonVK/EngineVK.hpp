@@ -23,10 +23,39 @@ using namespace Poseidon;
 
 typedef struct VmaAllocator_T* VmaAllocator;
 
+#include <Poseidon/Graphics/Rendering/RenderPassDescriptor.hpp>
+#include <unordered_map>
+
 namespace Poseidon
 {
 class TextureVK;
 class TextBankVK;
+class VertexBufferVK;
+
+struct PipelineKey
+{
+    render::RenderPassDescriptor desc;
+    int vertexFormat; // 0 = standard TLVertex, 1 = SVertex (mesh)
+
+    bool operator==(const PipelineKey& o) const
+    {
+        return desc == o.desc && vertexFormat == o.vertexFormat;
+    }
+};
+
+struct PipelineKeyHash
+{
+    std::size_t operator()(const PipelineKey& k) const
+    {
+        const char* p = reinterpret_cast<const char*>(&k.desc);
+        std::size_t hash = 5381;
+        for (size_t i = 0; i < sizeof(k.desc); ++i)
+            hash = ((hash << 5) + hash) ^ p[i];
+        hash ^= k.vertexFormat;
+        return hash;
+    }
+};
+
 class EngineVK;
 
 struct SVertex
@@ -114,6 +143,8 @@ protected:
     VkDescriptorSetLayout _descriptorSetLayoutGlobals = VK_NULL_HANDLE; // Set 0: UBOs
     VkDescriptorSetLayout _descriptorSetLayoutMaterial = VK_NULL_HANDLE; // Set 1: Textures
     VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
+    
+    std::unordered_map<PipelineKey, VkPipeline, PipelineKeyHash> _pipelineCache;
 
     TextBankVK* _textBank = nullptr;
 
@@ -233,6 +264,10 @@ public:
 
     /// optional overrides ///
     void EmitDraw(const render::frame::Draw& d) override;
+
+    /// State Management ///
+    VkPipeline GetOrCreatePipeline(const PipelineKey& key);
+    void ClearPipelineCache();
 
 private:
     void InitShaders();
