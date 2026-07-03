@@ -333,6 +333,26 @@ void EngineVK::EmitDraw(const render::frame::Draw& d)
     uint32_t sizePS = (sizeof(PSConstants) + alignment - 1) & ~(alignment - 1);
     vmaFlushAllocation(_vmaAllocator, _uniformAllocation[_currentFrame], offsetVS, sizeVS + sizeWorld + sizePS);
 
+    {
+        static int s_dbg = 0;
+        if (s_dbg < 3 && key.vertexFormat == 1)
+        {
+            const float* w = worldInst.worldArr[0];
+            const float* p = _vsConstants.proj;
+            const float* v = _vsConstants.view;
+            LOG_INFO(Graphics, "VK DBG#{} world=[{:.3f} {:.3f} {:.3f} {:.3f} / {:.3f} {:.3f} {:.3f} {:.3f} / "
+                     "{:.3f} {:.3f} {:.3f} {:.3f} / {:.1f} {:.1f} {:.1f} {:.3f}]",
+                     s_dbg, w[0],w[1],w[2],w[3], w[4],w[5],w[6],w[7], w[8],w[9],w[10],w[11], w[12],w[13],w[14],w[15]);
+            LOG_INFO(Graphics, "VK DBG#{} proj=[{:.3f} {:.3f} {:.3f} {:.3f} / {:.3f} {:.3f} {:.3f} {:.3f} / "
+                     "{:.3f} {:.3f} {:.3f} {:.3f} / {:.3f} {:.3f} {:.3f} {:.3f}]",
+                     s_dbg, p[0],p[1],p[2],p[3], p[4],p[5],p[6],p[7], p[8],p[9],p[10],p[11], p[12],p[13],p[14],p[15]);
+            LOG_INFO(Graphics, "VK DBG#{} view=[{:.3f} {:.3f} {:.3f} {:.3f} / {:.3f} {:.3f} {:.3f} {:.3f} / "
+                     "{:.3f} {:.3f} {:.3f} {:.3f} / {:.1f} {:.1f} {:.1f} {:.3f}]",
+                     s_dbg, v[0],v[1],v[2],v[3], v[4],v[5],v[6],v[7], v[8],v[9],v[10],v[11], v[12],v[13],v[14],v[15]);
+            s_dbg++;
+        }
+    }
+
     // Bind state, dynamic viewport/scissor, and descriptor sets (globals + material textures)
     BindPipelineStateAndDescriptors(cb, key, tex0, tex1);
 
