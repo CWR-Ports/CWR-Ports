@@ -96,7 +96,9 @@ void TextureVK::InitDesc(TextureDescVK& desc, int levelMin, bool enableDXT)
         else if (dFormat == PacFormat::PacAI88)
             desc.format = VK_FORMAT_R8G8_UNORM; // Assuming we use a swizzle or just use RG
         else
-            desc.format = VK_FORMAT_R8G8B8A8_UNORM; // PacARGB8888
+            // PacARGB8888 pixel data is B,G,R,A in memory (little-endian ARGB),
+            // so it must be sampled as BGRA — R8G8B8A8 here swapped red and blue.
+            desc.format = VK_FORMAT_B8G8R8A8_UNORM; // PacARGB8888
     }
 }
 

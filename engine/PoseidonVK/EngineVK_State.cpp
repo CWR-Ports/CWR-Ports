@@ -134,15 +134,17 @@ VkPipeline EngineVK::GetOrCreatePipeline(const PipelineKey& key)
         attributeDescriptions[1].location = 1;
         attributeDescriptions[1].format = VK_FORMAT_R32_SFLOAT;
         attributeDescriptions[1].offset = 12;
-        // color (PackedColor)
+        // color (PackedColor): read as raw RGBA bytes so the shader's aColor
+        // matches the GLES backend (glVertexAttribPointer GL_UNSIGNED_BYTE RGBA);
+        // both shaders then swizzle .bgra. Using B8G8R8A8 here swapped R and B.
         attributeDescriptions[2].binding = 0;
         attributeDescriptions[2].location = 2;
-        attributeDescriptions[2].format = VK_FORMAT_B8G8R8A8_UNORM;
+        attributeDescriptions[2].format = VK_FORMAT_R8G8B8A8_UNORM;
         attributeDescriptions[2].offset = 16;
         // specular (PackedColor)
         attributeDescriptions[3].binding = 0;
         attributeDescriptions[3].location = 3;
-        attributeDescriptions[3].format = VK_FORMAT_B8G8R8A8_UNORM;
+        attributeDescriptions[3].format = VK_FORMAT_R8G8B8A8_UNORM;
         attributeDescriptions[3].offset = 20;
         // t0 (UVPair)
         attributeDescriptions[4].binding = 0;
@@ -190,7 +192,13 @@ VkPipeline EngineVK::GetOrCreatePipeline(const PipelineKey& key)
         case render::CullMode::None: rasterizer.cullMode = VK_CULL_MODE_NONE; break;
     }
 
-    rasterizer.frontFace = (d.frontFace == render::FrontFaceMode::CW) ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
+    // The engine authors winding in the GL/D3D convention (CW = front, no
+    // viewport Y-flip). This backend renders with a negative-height viewport,
+    // which does NOT invert the rasterizer's front-face test here — mapping CW
+    // directly to VK_FRONT_FACE_CLOCKWISE keeps the same faces front-facing as
+    // the GLES backend. (Inverting it culled all visible geometry, including the
+    // 2D menu.)
+    rasterizer.frontFace = (d.frontFace == render::FrontFaceMode::CW) ? VK_FRONT_FACE_CLOCKWISE : VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = (d.surface == render::SurfaceMode::OnSurface) ? VK_TRUE : VK_FALSE;
 
     // multisample
