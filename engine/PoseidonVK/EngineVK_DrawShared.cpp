@@ -279,44 +279,64 @@ bool EngineVK::CanGrass() const
 namespace Poseidon
 {
 
+extern int g_emitDrawCalls;
+
 void EngineVK::EmitDraw(const render::frame::Draw& d)
 {
+    g_emitDrawCalls++;
     if (!_vkReady || !_frameOpen) return;
 
     PipelineKey key;
     key.desc = d.descriptor;
-    // for now, assume mesh draws (like models) use svertex (format 1),
-    // and ui/screen space uses tlvertex (format 0).
-    // if it's a 3d pass, it's format 1. 
-    key.vertexFormat = (d.descriptor.pass == render::PassKind::ScreenSpace3D) ? 0 : 1; 
-
-    VkPipeline pipeline = GetOrCreatePipeline(key);
-    if (pipeline == VK_NULL_HANDLE)
-        return;
+    key.vertexFormat = (d.descriptor.pass == render::PassKind::ScreenSpace3D) ? 0 : 1;
+    ApplyDescriptorPSState(d.descriptor,
+                           key.vertexFormat == 1 ? PipelineVertexInput::Mesh : PipelineVertexInput::Screen);
 
     VkCommandBuffer cb = _commandBuffers[_currentFrame];
-    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-    // apply dynamic states
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = static_cast<float>(_h);
-    viewport.width = static_cast<float>(_w);
-    viewport.height = -static_cast<float>(_h);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(cb, 0, 1, &viewport);
+    // Resolve textures from registry
+    TextureVK* tex0 = nullptr;
+    TextureVK* tex1 = nullptr;
+    if (d.textures[0].id != 0)
+    {
+        auto it = _textureRegistry.find(d.textures[0].id);
+        if (it != _textureRegistry.end()) tex0 = it->second;
+    }
+    if (d.textures[1].id != 0)
+    {
+        auto it = _textureRegistry.find(d.textures[1].id);
+        if (it != _textureRegistry.end()) tex1 = it->second;
+    }
 
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = _swapchainExtent;
-    vkCmdSetScissor(cb, 0, 1, &scissor);
+    // Allocate dynamic uniform offsets
+    uint32_t offsetVS = 0;
+    uint32_t offsetWorld = 0;
+    uint32_t offsetPS = 0;
+    AllocateUniformSpace(offsetVS, offsetWorld, offsetPS);
 
-    // bind uniform descriptor sets
-    // uint32_t dynamicOffsets[2] = {0, 0};
-    // vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descriptorSet, 2, dynamicOffsets);
+    _uniformOffsetVS = offsetVS;
+    _uniformOffsetWorld = offsetWorld;
+    _uniformOffsetPS = offsetPS;
 
-    // resolve and bind mesh buffers
+    // Upload current constant state to UBO
+    std::memcpy(static_cast<char*>(_uniformMapped[_currentFrame]) + offsetVS, &_vsConstants, sizeof(VSConstants));
+    std::memcpy(static_cast<char*>(_uniformMapped[_currentFrame]) + offsetPS, &_psConstants, sizeof(PSConstants));
+
+    // Upload world matrix
+    WorldInstances worldInst = {};
+    std::memcpy(&worldInst.worldArr[0], &d.world, sizeof(float) * 16);
+    std::memcpy(static_cast<char*>(_uniformMapped[_currentFrame]) + offsetWorld, &worldInst, sizeof(WorldInstances));
+
+    const uint32_t alignment = 256;
+    uint32_t sizeVS = (sizeof(VSConstants) + alignment - 1) & ~(alignment - 1);
+    uint32_t sizeWorld = (sizeof(WorldInstances) + alignment - 1) & ~(alignment - 1);
+    uint32_t sizePS = (sizeof(PSConstants) + alignment - 1) & ~(alignment - 1);
+    vmaFlushAllocation(_vmaAllocator, _uniformAllocation[_currentFrame], offsetVS, sizeVS + sizeWorld + sizePS);
+
+    // Bind state, dynamic viewport/scissor, and descriptor sets (globals + material textures)
+    BindPipelineStateAndDescriptors(cb, key, tex0, tex1);
+
+    // Resolve and bind mesh buffers
     VertexBufferVK* vbuf = GetVertexBuffer(d.mesh.vao);
     if (vbuf)
     {
@@ -334,6 +354,8 @@ void EngineVK::EmitDraw(const render::frame::Draw& d)
             vkCmdDraw(cb, vbuf->_vertexCount, 1, 0, 0);
         }
     }
+
+    ++Poseidon::gPerfDrawCalls;
 }
 
 } // namespace Poseidon

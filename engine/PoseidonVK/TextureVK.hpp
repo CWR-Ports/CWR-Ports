@@ -165,7 +165,8 @@ class TextureVK : public Texture
     Poseidon::AlphaStats::Kind GetAlphaClass() override;
 
     int Size() const;
-    void UpdateRGBA(const unsigned char* rgb, int w, int h);
+    bool InitFromRGBA(int w, int h, const void* rgba, uint32_t size, bool mipmap = false);
+    void UpdateRGBA(const void* rgba, uint32_t size);
 };
 
 } // namespace Poseidon

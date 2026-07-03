@@ -4,8 +4,13 @@
  */
 
 #include <PoseidonVK/EngineVK.hpp>
+#include "vk_mem_alloc.h"
 #include <Poseidon/Core/Application.hpp>
 #include <Poseidon/Foundation/Logging/Logging.hpp>
+#include <Poseidon/World/Scene/Camera/Camera.hpp>
+#include <Poseidon/Graphics/Rendering/Lighting/Lights.hpp>
+#include <Poseidon/World/Scene/Scene.hpp>
+#include <Poseidon/Graphics/Core/MatrixConversion.hpp>
 #include <glslang/Public/ShaderLang.h>
 #include <glslang/Public/ResourceLimits.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
@@ -818,6 +823,106 @@ void EngineVK::InitPipelineLayouts()
     {
         LOG_ERROR(Graphics, "Vulkan: Failed to create pipeline layout!");
     }
+
+    // Create global dynamic uniform buffer
+    VkBufferCreateInfo uboInfo{};
+    uboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    uboInfo.size = 128 * 1024 * 1024; // 128 MB
+    uboInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    uboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo uboAllocInfo{};
+    uboAllocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    uboAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VmaAllocationInfo uboAllocResult{};
+        if (vmaCreateBuffer(_vmaAllocator, &uboInfo, &uboAllocInfo, &_uniformBuffer[i], &_uniformAllocation[i], &uboAllocResult) != VK_SUCCESS)
+        {
+            LOG_ERROR(Graphics, "PoseidonVK: Failed to create dynamic uniform buffer {}", i);
+            return;
+        }
+        _uniformMapped[i] = uboAllocResult.pMappedData;
+    }
+
+    // Descriptor Pool sizes
+    VkDescriptorPoolSize poolSizes[1] = {};
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    poolSizes[0].descriptorCount = 3 * MAX_FRAMES_IN_FLIGHT;
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = poolSizes;
+    poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT;
+
+    if (vkCreateDescriptorPool(_device, &poolInfo, nullptr, &_descriptorPool) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "PoseidonVK: Failed to create global descriptor pool");
+        return;
+    }
+
+    // Material Descriptor Pool sizes
+    VkDescriptorPoolSize matPoolSizes[1] = {};
+    matPoolSizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    matPoolSizes[0].descriptorCount = 3000;
+
+    VkDescriptorPoolCreateInfo matPoolInfo{};
+    matPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    matPoolInfo.poolSizeCount = 1;
+    matPoolInfo.pPoolSizes = matPoolSizes;
+    matPoolInfo.maxSets = 1000;
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        if (vkCreateDescriptorPool(_device, &matPoolInfo, nullptr, &_materialDescriptorPool[i]) != VK_SUCCESS)
+        {
+            LOG_ERROR(Graphics, "PoseidonVK: Failed to create material descriptor pool {}", i);
+            return;
+        }
+    }
+
+    for (int f = 0; f < MAX_FRAMES_IN_FLIGHT; f++)
+    {
+        // Allocate global descriptor set
+        VkDescriptorSetAllocateInfo globalAllocInfo{};
+        globalAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        globalAllocInfo.descriptorPool = _descriptorPool;
+        globalAllocInfo.descriptorSetCount = 1;
+        globalAllocInfo.pSetLayouts = &_descriptorSetLayoutGlobals;
+
+        if (vkAllocateDescriptorSets(_device, &globalAllocInfo, &_globalDescriptorSet[f]) != VK_SUCCESS)
+        {
+            LOG_ERROR(Graphics, "PoseidonVK: Failed to allocate global descriptor set for frame {}", f);
+            return;
+        }
+
+        // Write global descriptor set bindings
+        VkDescriptorBufferInfo bufferInfos[3] = {};
+        for (int i = 0; i < 3; i++)
+        {
+            bufferInfos[i].buffer = _uniformBuffer[f];
+            bufferInfos[i].offset = 0;
+        }
+        bufferInfos[0].range = sizeof(VSConstants);
+        bufferInfos[1].range = sizeof(WorldInstances);
+        bufferInfos[2].range = sizeof(PSConstants);
+
+        VkWriteDescriptorSet writes[3] = {};
+        for (int i = 0; i < 3; i++)
+        {
+            writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[i].dstSet = _globalDescriptorSet[f];
+            writes[i].dstBinding = i;
+            writes[i].dstArrayElement = 0;
+            writes[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+            writes[i].descriptorCount = 1;
+            writes[i].pBufferInfo = &bufferInfos[i];
+        }
+
+        vkUpdateDescriptorSets(_device, 3, writes, 0, nullptr);
+    }
 }
 
 void EngineVK::DeinitPipelineLayouts()
@@ -867,6 +972,163 @@ void EngineVK::DeinitPipelineLayouts()
         vkDestroyDescriptorSetLayout(_device, _descriptorSetLayoutMaterial, nullptr);
         _descriptorSetLayoutMaterial = VK_NULL_HANDLE;
     }
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        if (_uniformBuffer[i])
+        {
+            vmaDestroyBuffer(_vmaAllocator, _uniformBuffer[i], _uniformAllocation[i]);
+            _uniformBuffer[i] = VK_NULL_HANDLE;
+            _uniformMapped[i] = nullptr;
+        }
+    }
+
+    if (_descriptorPool)
+    {
+        vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
+        _descriptorPool = VK_NULL_HANDLE;
+    }
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        if (_materialDescriptorPool[i])
+        {
+            vkDestroyDescriptorPool(_device, _materialDescriptorPool[i], nullptr);
+            _materialDescriptorPool[i] = VK_NULL_HANDLE;
+        }
+    }
+}
+
+FrameState EngineVK::BuildFrameState(Camera* camera, LightSun* sun, int bias, const Color& fogColor, bool sunEnabled)
+{
+    FrameState frame = {};
+
+    ConvertMatrix(frame.view, camera->InverseScaled());
+    frame.view._41 = 0;
+    frame.view._42 = 0;
+    frame.view._43 = 0;
+
+    int projBias = CanZBias() ? 0 : bias;
+    ConvertProjectionMatrix(frame.projection, camera->ProjectionNormal(), projBias);
+
+    Vector3 pos = camera->Position();
+    frame.cameraPos[0] = static_cast<float>(pos.X());
+    frame.cameraPos[1] = static_cast<float>(pos.Y());
+    frame.cameraPos[2] = static_cast<float>(pos.Z());
+
+    frame.viewport[0] = 0;
+    frame.viewport[1] = 0;
+    frame.viewport[2] = static_cast<float>(_w);
+    frame.viewport[3] = static_cast<float>(_h);
+
+    float wFogStart = camera->ClipNear();
+    float wFogEnd = camera->ClipFar();
+    if (GScene)
+    {
+        wFogStart = GScene->GetFogMinRange();
+        wFogEnd = GScene->GetFogMaxRange();
+    }
+    float fogInvRange = (wFogEnd > wFogStart) ? 1.0f / (wFogEnd - wFogStart) : 0.0f;
+    frame.fogParams[0] = wFogStart;
+    frame.fogParams[1] = fogInvRange;
+    frame.fogParams[2] = 1.0f; // enabled
+    frame.fogParams[3] = 0;
+
+    frame.fogColor[0] = fogColor.R();
+    frame.fogColor[1] = fogColor.G();
+    frame.fogColor[2] = fogColor.B();
+    frame.fogColor[3] = 1.0f;
+
+    Vector3 dir = sun->Direction();
+    frame.sunDir[0] = dir.X();
+    frame.sunDir[1] = dir.Y();
+    frame.sunDir[2] = dir.Z();
+    frame.sunDir[3] = 0;
+    frame.sunEnabled = sunEnabled;
+
+    return frame;
+}
+
+PassState EngineVK::BuildPassState(const FrameState& frame, PassId passId)
+{
+    PassState ps;
+    ps.projection = frame.projection;
+
+    switch (passId)
+    {
+        case PassId::Opaque:
+            ps.depthMode = DepthModeV4::Normal;
+            ps.blendMode = BlendModeV4::Opaque;
+            ps.fogMode = FogMode::Enabled;
+            ps.shaderPipeline = VSTransform;
+            break;
+
+        case PassId::Cutout:
+            ps.depthMode = DepthModeV4::Normal;
+            ps.blendMode = BlendModeV4::Opaque;
+            ps.fogMode = FogMode::Enabled;
+            ps.shaderPipeline = VSTransform;
+            ps.passFlags = 1;
+            break;
+
+        case PassId::Transparent:
+            ps.depthMode = DepthModeV4::ReadOnly;
+            ps.blendMode = BlendModeV4::AlphaBlend;
+            ps.fogMode = FogMode::Enabled;
+            ps.shaderPipeline = VSTransform;
+            break;
+
+        case PassId::Shadow:
+            ps.depthMode = DepthModeV4::Shadow;
+            ps.blendMode = BlendModeV4::Shadow;
+            ps.fogMode = FogMode::Disabled;
+            ps.shaderPipeline = VSTransform;
+            break;
+
+        case PassId::Light:
+            ps.depthMode = DepthModeV4::ReadOnly;
+            ps.blendMode = BlendModeV4::Additive;
+            ps.fogMode = FogMode::Disabled;
+            ps.shaderPipeline = VSTransform;
+            break;
+
+        case PassId::OnSurface:
+            ps.depthMode = DepthModeV4::Normal;
+            ps.blendMode = BlendModeV4::Opaque;
+            ps.fogMode = FogMode::Enabled;
+            ps.shaderPipeline = VSTransform;
+            break;
+
+        case PassId::Cockpit:
+            ps.depthMode = DepthModeV4::Normal;
+            ps.blendMode = BlendModeV4::Opaque;
+            ps.fogMode = FogMode::Disabled;
+            ps.shaderPipeline = VSTransform;
+            break;
+
+        case PassId::Sky:
+            ps.depthMode = DepthModeV4::Disabled;
+            ps.blendMode = BlendModeV4::Opaque;
+            ps.fogMode = FogMode::Disabled;
+            ps.shaderPipeline = VSTransform;
+            break;
+
+        case PassId::Water:
+            ps.depthMode = DepthModeV4::Normal;
+            ps.blendMode = BlendModeV4::Opaque;
+            ps.fogMode = FogMode::Enabled;
+            ps.shaderPipeline = VSTransform;
+            break;
+
+        case PassId::ScreenSpace:
+            ps.depthMode = DepthModeV4::Disabled;
+            ps.blendMode = BlendModeV4::AlphaBlend;
+            ps.fogMode = FogMode::Disabled;
+            ps.shaderPipeline = VSScreen;
+            break;
+    }
+
+    return ps;
 }
 
 } // namespace Poseidon

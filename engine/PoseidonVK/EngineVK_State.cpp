@@ -3,6 +3,8 @@
  */
 
 #include <PoseidonVK/EngineVK.hpp>
+#include <PoseidonVK/TextureVK.hpp>
+#include "vk_mem_alloc.h"
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 
 namespace Poseidon
@@ -50,15 +52,15 @@ VkPipeline EngineVK::GetOrCreatePipeline(const PipelineKey& key)
             }
             break;
         case render::ShaderFamily::Water:
-            vs = meshVertexInput ? VSTransform : VSNone;
+            vs = meshVertexInput ? VSTransform : VSScreen;
             ps = PSWater;
             break;
         case render::ShaderFamily::Detail:
-            vs = meshVertexInput ? VSTransform : VSNone;
+            vs = meshVertexInput ? VSTransform : VSScreen;
             ps = PSDetail;
             break;
         case render::ShaderFamily::Grass:
-            vs = meshVertexInput ? VSTransform : VSNone;
+            vs = meshVertexInput ? VSTransform : VSScreen;
             ps = PSGrass;
             break;
         case render::ShaderFamily::Flat:
@@ -67,7 +69,7 @@ VkPipeline EngineVK::GetOrCreatePipeline(const PipelineKey& key)
             break;
         case render::ShaderFamily::Normal:
         default:
-            vs = meshVertexInput ? VSTransform : VSNone;
+            vs = meshVertexInput ? VSTransform : VSScreen;
             ps = PSNormal;
             break;
     }
@@ -120,8 +122,7 @@ VkPipeline EngineVK::GetOrCreatePipeline(const PipelineKey& key)
     }
     else // TLVertex
     {
-        bindingDescription.stride = 36;
-        bindingDescription.stride = 40;
+        bindingDescription.stride = sizeof(Poseidon::TLVertex);
         attributeDescriptions.resize(6);
         // pos (Vector3P)
         attributeDescriptions[0].binding = 0;
@@ -189,7 +190,7 @@ VkPipeline EngineVK::GetOrCreatePipeline(const PipelineKey& key)
         case render::CullMode::None: rasterizer.cullMode = VK_CULL_MODE_NONE; break;
     }
 
-    rasterizer.frontFace = (d.frontFace == render::FrontFaceMode::CW) ? VK_FRONT_FACE_CLOCKWISE : VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.frontFace = (d.frontFace == render::FrontFaceMode::CW) ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = (d.surface == render::SurfaceMode::OnSurface) ? VK_TRUE : VK_FALSE;
 
     // multisample
@@ -323,6 +324,124 @@ VkPipeline EngineVK::GetOrCreatePipeline(const PipelineKey& key)
 
     _pipelineCache[key] = pipeline;
     return pipeline;
+}
+
+void EngineVK::AllocateUniformSpace(uint32_t& outVS, uint32_t& outWorld, uint32_t& outPS)
+{
+    const uint32_t alignment = 256;
+
+    uint32_t sizeVS = (sizeof(VSConstants) + alignment - 1) & ~(alignment - 1);
+    uint32_t sizeWorld = (sizeof(WorldInstances) + alignment - 1) & ~(alignment - 1);
+    uint32_t sizePS = (sizeof(PSConstants) + alignment - 1) & ~(alignment - 1);
+
+    uint32_t blockSize = sizeVS + sizeWorld + sizePS;
+
+    if (_uniformOffset + blockSize > 128 * 1024 * 1024)
+    {
+        LOG_ERROR(Graphics, "PoseidonVK: Out of uniform buffer memory!");
+        _uniformOffset = 0;
+    }
+
+    outVS = _uniformOffset;
+    outWorld = outVS + sizeVS;
+    outPS = outWorld + sizeWorld;
+
+    _uniformOffset += blockSize;
+}
+
+VkDescriptorSet EngineVK::GetOrCreateMaterialDescriptorSet(VkImageView tex0, VkImageView tex1, VkImageView shadowMap)
+{
+    MaterialDescriptorKey key{ tex0, tex1, shadowMap };
+    auto& cache = _materialDescriptorCache[_currentFrame];
+    auto it = cache.find(key);
+    if (it != cache.end())
+    {
+        return it->second;
+    }
+
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = _materialDescriptorPool[_currentFrame];
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &_descriptorSetLayoutMaterial;
+
+    VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+    if (vkAllocateDescriptorSets(_device, &allocInfo, &descriptorSet) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "PoseidonVK: Failed to allocate material descriptor set");
+        return VK_NULL_HANDLE;
+    }
+
+    VkDescriptorImageInfo imageInfos[3] = {};
+    
+    imageInfos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfos[0].imageView = tex0;
+    imageInfos[0].sampler = _defaultSampler;
+
+    imageInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfos[1].imageView = tex1;
+    imageInfos[1].sampler = _defaultSampler;
+
+    imageInfos[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfos[2].imageView = shadowMap;
+    imageInfos[2].sampler = _defaultSampler;
+
+    VkWriteDescriptorSet descriptorWrites[3] = {};
+    for (int i = 0; i < 3; i++)
+    {
+        descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[i].dstSet = descriptorSet;
+        descriptorWrites[i].dstBinding = i;
+        descriptorWrites[i].dstArrayElement = 0;
+        descriptorWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[i].descriptorCount = 1;
+        descriptorWrites[i].pImageInfo = &imageInfos[i];
+    }
+
+    vkUpdateDescriptorSets(_device, 3, descriptorWrites, 0, nullptr);
+
+    cache[key] = descriptorSet;
+    return descriptorSet;
+}
+
+void EngineVK::BindPipelineStateAndDescriptors(VkCommandBuffer cb, const PipelineKey& key, TextureVK* tex, TextureVK* tex1)
+{
+    VkPipeline pipeline = GetOrCreatePipeline(key);
+    if (pipeline == VK_NULL_HANDLE)
+        return;
+
+    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = static_cast<float>(_h);
+    viewport.width = static_cast<float>(_w);
+    viewport.height = -static_cast<float>(_h);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(cb, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = _swapchainExtent;
+    vkCmdSetScissor(cb, 0, 1, &scissor);
+
+    uint32_t dynamicOffsets[3] = { _uniformOffsetVS, _uniformOffsetWorld, _uniformOffsetPS };
+    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_globalDescriptorSet[_currentFrame], 3, dynamicOffsets);
+
+    VkImageView view0 = tex ? tex->GetSurface().GetImageView() : _fallbackWhiteImageView;
+    VkImageView view1 = tex1 ? tex1->GetSurface().GetImageView() : _fallbackWhiteImageView;
+
+    if (view0 == VK_NULL_HANDLE) view0 = _fallbackWhiteImageView;
+    if (view1 == VK_NULL_HANDLE) view1 = _fallbackWhiteImageView;
+
+    VkImageView shadowView = (_shadowImageView != VK_NULL_HANDLE) ? _shadowImageView : _fallbackWhiteArrayImageView;
+
+    VkDescriptorSet matSet = GetOrCreateMaterialDescriptorSet(view0, view1, shadowView);
+    if (matSet != VK_NULL_HANDLE)
+    {
+        vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 1, 1, &matSet, 0, nullptr);
+    }
 }
 
 } // namespace Poseidon

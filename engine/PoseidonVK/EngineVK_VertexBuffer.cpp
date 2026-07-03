@@ -1,6 +1,8 @@
 #include <PoseidonVK/EngineVK.hpp>
 #include <PoseidonVK/VertexBufferVK.hpp>
 #include <Poseidon/Graphics/Rendering/Primitives/Poly.hpp>
+#include <Poseidon/Graphics/Rendering/BuildRenderPassDescriptor.hpp>
+#include <Poseidon/Graphics/Rendering/Frame/Frame.hpp>
 
 namespace Poseidon
 {
@@ -173,6 +175,51 @@ VertexBuffer* EngineVK::CreateVertexBuffer(const Shape& src, VBType type)
     }
     delete buf;
     return nullptr;
+}
+
+void EngineVK::DrawSectionTL(const Shape& sMesh, int beg, int end)
+{
+    auto* buf = static_cast<VertexBufferVK*>(sMesh.GetVertexBuffer());
+    if (!buf || buf->_sections.Size() == 0)
+        return;
+
+    PoseidonAssert(end > beg);
+    PoseidonAssert(end <= buf->_sections.Size());
+
+    const VBSectionInfoVK& siBeg = buf->_sections[beg];
+    const VBSectionInfoVK& siEnd = buf->_sections[end - 1];
+
+    int indexCount = siEnd.end - siBeg.beg;
+    if (indexCount <= 0)
+        return;
+
+    DrawItem item = _currentDrawItem;
+    item.isTLDraw = true;
+    item.sectionBegin = beg;
+    item.sectionEnd = end;
+    item.firstIndex = siBeg.beg;
+    item.indexCount = indexCount;
+    item.vertexBuffer = buf;
+    item.backendMeshHandle = buf->_vao;
+    item.backendTexture1Handle = _lastTexture1Handle;
+    item.passId = SpecToPassId(item.specFlags);
+    _drawItems.push_back(item);
+
+    Poseidon::render::BuildContext ctx;
+    ctx.isIn3DPass = IsIn3DPass();
+    ctx.isMultitexturing = IsMultitexturing();
+    ctx.shadowAlphaRef = static_cast<std::uint8_t>((_shadowFactor * 7) >> 4);
+    ctx.passKindHint = GetPassKindHint();
+
+    Poseidon::render::frame::Draw d;
+    d.world = item.worldMatrix;
+    d.mesh.vao = buf->_vao;
+    d.indexBegin = siBeg.beg;
+    d.indexCount = indexCount;
+    d.textures[0].id = item.backendTextureHandle;
+    d.textures[1].id = _lastTexture1Handle;
+    d.descriptor = Poseidon::render::BuildRenderPassDescriptor(item.specFlags, ctx);
+    EmitDraw(d);
 }
 
 int EngineVK::CompareBuffers(const Shape&, const Shape&)

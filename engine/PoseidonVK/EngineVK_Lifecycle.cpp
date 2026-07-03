@@ -108,12 +108,9 @@ bool EngineVK::CreateVkInstance()
     const char* const* sdlExts = SDL_Vulkan_GetInstanceExtensions(&sdlExtCount);
 
     std::vector<const char*> extensions(sdlExts, sdlExts + sdlExtCount);
-#ifndef NDEBUG
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-#endif
 
     std::vector<const char*> layers;
-#ifndef NDEBUG
     uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
     std::vector<VkLayerProperties> available(layerCount);
@@ -126,7 +123,6 @@ bool EngineVK::CreateVkInstance()
             break;
         }
     }
-#endif
 
     VkInstanceCreateInfo ci{};
     ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -142,7 +138,6 @@ bool EngineVK::CreateVkInstance()
         return false;
     }
 
-#ifndef NDEBUG
     auto createMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)
         vkGetInstanceProcAddr(_instance, "vkCreateDebugUtilsMessengerEXT");
     if (createMessenger)
@@ -157,7 +152,6 @@ bool EngineVK::CreateVkInstance()
         dci.pfnUserCallback = VkDebugCallback;
         createMessenger(_instance, &dci, nullptr, &_debugMessenger);
     }
-#endif
 
     LOG_INFO(Graphics, "PoseidonVK: Vulkan instance created ({} extensions, {} layers)",
              extensions.size(), layers.size());
@@ -276,7 +270,6 @@ bool EngineVK::CreateSwapchain()
 {
     SwapchainSupport ss = QuerySwapchainSupport(_physicalDevice, _surface);
 
-    // pick format: prefer BGRA8 SRGB
     VkSurfaceFormatKHR fmt = ss.formats[0];
     for (auto& f : ss.formats)
     {
@@ -287,7 +280,6 @@ bool EngineVK::CreateSwapchain()
         }
     }
 
-    // pick present mode: prefer mailbox (triple buffering), fallback to fifo
     VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
     for (auto& m : ss.presentModes)
     {
@@ -298,7 +290,6 @@ bool EngineVK::CreateSwapchain()
         }
     }
 
-    // pick extent
     VkExtent2D extent;
     if (ss.caps.currentExtent.width != UINT32_MAX)
     {
@@ -326,7 +317,7 @@ bool EngineVK::CreateSwapchain()
     sci.imageColorSpace = fmt.colorSpace;
     sci.imageExtent = extent;
     sci.imageArrayLayers = 1;
-    sci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    sci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     uint32_t familyIndices[] = { (uint32_t)_queueFamilyIndices[0], (uint32_t)_queueFamilyIndices[1] };
     if (_queueFamilyIndices[0] != _queueFamilyIndices[1])
@@ -359,7 +350,6 @@ bool EngineVK::CreateSwapchain()
     _swapchainFormat = fmt.format;
     _swapchainExtent = extent;
 
-    // create image views
     _swapchainImageViews.resize(imageCount);
     for (uint32_t i = 0; i < imageCount; i++)
     {
@@ -392,29 +382,82 @@ bool EngineVK::CreateSwapchain()
 
     LOG_INFO(Graphics, "PoseidonVK: swapchain created {}x{} ({} images, format {})",
              _w, _h, imageCount, (int)_swapchainFormat);
+    VkImageCreateInfo dimg{};
+    dimg.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    dimg.imageType = VK_IMAGE_TYPE_2D;
+    dimg.extent.width = _swapchainExtent.width;
+    dimg.extent.height = _swapchainExtent.height;
+    dimg.extent.depth = 1;
+    dimg.mipLevels = 1;
+    dimg.arrayLayers = 1;
+    dimg.format = _depthFormat;
+    dimg.tiling = VK_IMAGE_TILING_OPTIMAL;
+    dimg.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    dimg.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    dimg.samples = VK_SAMPLE_COUNT_1_BIT;
+
+    VmaAllocationCreateInfo dalloc{};
+    dalloc.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    if (vmaCreateImage(_vmaAllocator, &dimg, &dalloc, &_depthImage, &_depthImageAllocation, nullptr) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "PoseidonVK: failed to create depth image");
+        return false;
+    }
+
+    VkImageViewCreateInfo dview{};
+    dview.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    dview.image = _depthImage;
+    dview.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    dview.format = _depthFormat;
+    dview.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    dview.subresourceRange.baseMipLevel = 0;
+    dview.subresourceRange.levelCount = 1;
+    dview.subresourceRange.baseArrayLayer = 0;
+    dview.subresourceRange.layerCount = 1;
+
+    if (vkCreateImageView(_device, &dview, nullptr, &_depthImageView) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "PoseidonVK: failed to create depth image view");
+        return false;
+    }
+
     return true;
 }
 
 bool EngineVK::CreateRenderPass()
 {
-    VkAttachmentDescription colorAtt{};
-    colorAtt.format = _swapchainFormat;
-    colorAtt.samples = VK_SAMPLE_COUNT_1_BIT;
-    colorAtt.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    colorAtt.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAtt.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    colorAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    colorAtt.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAtt.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    VkAttachmentDescription attachments[2] = {};
+    attachments[0].format = _swapchainFormat;
+    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    attachments[1].format = _depthFormat;
+    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference colorRef{};
     colorRef.attachment = 0;
     colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    
+    VkAttachmentReference depthRef{};
+    depthRef.attachment = 1;
+    depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorRef;
+    subpass.pDepthStencilAttachment = &depthRef;
 
     VkSubpassDependency dep{};
     dep.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -426,8 +469,8 @@ bool EngineVK::CreateRenderPass()
 
     VkRenderPassCreateInfo rpci{};
     rpci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    rpci.attachmentCount = 1;
-    rpci.pAttachments = &colorAtt;
+    rpci.attachmentCount = 2;
+    rpci.pAttachments = attachments;
     rpci.subpassCount = 1;
     rpci.pSubpasses = &subpass;
     rpci.dependencyCount = 1;
@@ -446,12 +489,12 @@ bool EngineVK::CreateFramebuffers()
     _swapchainFramebuffers.resize(_swapchainImageViews.size());
     for (size_t i = 0; i < _swapchainImageViews.size(); i++)
     {
-        VkImageView attachments[] = { _swapchainImageViews[i] };
+        VkImageView attachments[] = { _swapchainImageViews[i], _depthImageView };
 
         VkFramebufferCreateInfo fbci{};
         fbci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         fbci.renderPass = _renderPass;
-        fbci.attachmentCount = 1;
+        fbci.attachmentCount = 2;
         fbci.pAttachments = attachments;
         fbci.width = _swapchainExtent.width;
         fbci.height = _swapchainExtent.height;
@@ -504,14 +547,22 @@ bool EngineVK::CreateSyncObjects()
     fci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
     _imageAvailableSem.resize(MAX_FRAMES_IN_FLIGHT);
-    _renderFinishedSem.resize(MAX_FRAMES_IN_FLIGHT);
+    _renderFinishedSem.resize(_swapchainImages.size());
     _inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         if (vkCreateSemaphore(_device, &sci, nullptr, &_imageAvailableSem[i]) != VK_SUCCESS ||
-            vkCreateSemaphore(_device, &sci, nullptr, &_renderFinishedSem[i]) != VK_SUCCESS ||
             vkCreateFence(_device, &fci, nullptr, &_inFlightFences[i]) != VK_SUCCESS)
+        {
+            LOG_ERROR(Graphics, "PoseidonVK: sync object creation failed");
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < _swapchainImages.size(); i++)
+    {
+        if (vkCreateSemaphore(_device, &sci, nullptr, &_renderFinishedSem[i]) != VK_SUCCESS)
         {
             LOG_ERROR(Graphics, "PoseidonVK: sync object creation failed");
             return false;
@@ -536,16 +587,13 @@ void EngineVK::InitVulkan()
         return;
     }
 
+    _eventWindow.Attach(_sdlWindow, _w, _h); // Link backend window listener to receive message states
+
     if (!CreateVkInstance()) return;
     if (!CreateVkSurface()) return;
     if (!PickPhysicalDevice()) return;
     if (!CreateLogicalDevice()) return;
-    if (!CreateSwapchain()) return;
-    if (!CreateRenderPass()) return;
-    if (!CreateFramebuffers()) return;
-    if (!CreateCommandPool()) return;
-    if (!CreateSyncObjects()) return;
-
+    
     VmaAllocatorCreateInfo allocatorInfo{};
     allocatorInfo.physicalDevice = _physicalDevice;
     allocatorInfo.device = _device;
@@ -555,6 +603,214 @@ void EngineVK::InitVulkan()
     {
         LOG_ERROR(Graphics, "PoseidonVK: vmaCreateAllocator failed");
         return;
+    }
+
+    if (!CreateSwapchain()) return;
+    if (!CreateRenderPass()) return;
+    if (!CreateFramebuffers()) return;
+    if (!CreateCommandPool()) return;
+    if (!CreateSyncObjects()) return;
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VkBufferCreateInfo vboInfo{};
+        vboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        vboInfo.size = MeshBufferLength * sizeof(TLVertex);
+        vboInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        vboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo allocInfo{};
+        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VmaAllocationInfo vboAllocInfo{};
+        if (vmaCreateBuffer(_vmaAllocator, &vboInfo, &allocInfo, &_vbo[i], &_vboAllocation[i], &vboAllocInfo) != VK_SUCCESS)
+        {
+            LOG_ERROR(Graphics, "PoseidonVK: Failed to create dynamic VBO for frame {}", i);
+            return;
+        }
+        _vboMapped[i] = vboAllocInfo.pMappedData;
+
+        VkBufferCreateInfo iboInfo{};
+        iboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        iboInfo.size = IndexBufferLength * sizeof(WORD);
+        iboInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        iboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationInfo iboAllocInfo{};
+        if (vmaCreateBuffer(_vmaAllocator, &iboInfo, &allocInfo, &_ibo[i], &_iboAllocation[i], &iboAllocInfo) != VK_SUCCESS)
+        {
+            LOG_ERROR(Graphics, "PoseidonVK: Failed to create dynamic IBO for frame {}", i);
+            return;
+        }
+        _iboMapped[i] = iboAllocInfo.pMappedData;
+    }
+
+    VkImageCreateInfo whiteInfo{};
+    whiteInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    whiteInfo.imageType = VK_IMAGE_TYPE_2D;
+    whiteInfo.extent.width = 1;
+    whiteInfo.extent.height = 1;
+    whiteInfo.extent.depth = 1;
+    whiteInfo.mipLevels = 1;
+    whiteInfo.arrayLayers = 1;
+    whiteInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    whiteInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    whiteInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    whiteInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    whiteInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    whiteInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+    VmaAllocationCreateInfo whiteAllocInfo{};
+    whiteAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+    if (vmaCreateImage(_vmaAllocator, &whiteInfo, &whiteAllocInfo, &_fallbackWhiteImage, &_fallbackWhiteAllocation, nullptr) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "PoseidonVK: Failed to create fallback white image");
+        return;
+    }
+
+    VkImageViewCreateInfo whiteViewInfo{};
+    whiteViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    whiteViewInfo.image = _fallbackWhiteImage;
+    whiteViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    whiteViewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    whiteViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    whiteViewInfo.subresourceRange.baseMipLevel = 0;
+    whiteViewInfo.subresourceRange.levelCount = 1;
+    whiteViewInfo.subresourceRange.baseArrayLayer = 0;
+    whiteViewInfo.subresourceRange.layerCount = 1;
+
+    if (vkCreateImageView(_device, &whiteViewInfo, nullptr, &_fallbackWhiteImageView) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "PoseidonVK: Failed to create fallback white image view");
+        return;
+    }
+
+    VkImageViewCreateInfo whiteArrayViewInfo{};
+    whiteArrayViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    whiteArrayViewInfo.image = _fallbackWhiteImage;
+    whiteArrayViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    whiteArrayViewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    whiteArrayViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    whiteArrayViewInfo.subresourceRange.baseMipLevel = 0;
+    whiteArrayViewInfo.subresourceRange.levelCount = 1;
+    whiteArrayViewInfo.subresourceRange.baseArrayLayer = 0;
+    whiteArrayViewInfo.subresourceRange.layerCount = 1;
+
+    if (vkCreateImageView(_device, &whiteArrayViewInfo, nullptr, &_fallbackWhiteArrayImageView) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "PoseidonVK: Failed to create fallback white array image view");
+        return;
+    }
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_FALSE;
+    samplerInfo.maxAnisotropy = 1.0f;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 16.0f;
+
+    if (vkCreateSampler(_device, &samplerInfo, nullptr, &_defaultSampler) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "PoseidonVK: Failed to create default sampler");
+        return;
+    }
+
+    VkBuffer stagingBuffer = VK_NULL_HANDLE;
+    VmaAllocation stagingAlloc = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo stageInfo{};
+    stageInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    stageInfo.size = 4;
+    stageInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo stageAllocInfo{};
+    stageAllocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
+    stageAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    VmaAllocationInfo stageResult{};
+    if (vmaCreateBuffer(_vmaAllocator, &stageInfo, &stageAllocInfo, &stagingBuffer, &stagingAlloc, &stageResult) == VK_SUCCESS)
+    {
+        uint32_t whitePixel = 0xffffffff;
+        std::memcpy(stageResult.pMappedData, &whitePixel, 4);
+
+        VkCommandBufferAllocateInfo cmdAlloc{};
+        cmdAlloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmdAlloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmdAlloc.commandPool = _commandPool;
+        cmdAlloc.commandBufferCount = 1;
+
+        VkCommandBuffer cb = VK_NULL_HANDLE;
+        if (vkAllocateCommandBuffers(_device, &cmdAlloc, &cb) == VK_SUCCESS)
+        {
+            VkCommandBufferBeginInfo begin{};
+            begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            vkBeginCommandBuffer(cb, &begin);
+
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = _fallbackWhiteImage;
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = 1;
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+            vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+            VkBufferImageCopy region{};
+            region.bufferOffset = 0;
+            region.bufferRowLength = 0;
+            region.bufferImageHeight = 0;
+            region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            region.imageSubresource.mipLevel = 0;
+            region.imageSubresource.baseArrayLayer = 0;
+            region.imageSubresource.layerCount = 1;
+            region.imageOffset = {0, 0, 0};
+            region.imageExtent = {1, 1, 1};
+
+            vkCmdCopyBufferToImage(cb, stagingBuffer, _fallbackWhiteImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+            vkEndCommandBuffer(cb);
+
+            VkSubmitInfo submit{};
+            submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submit.commandBufferCount = 1;
+            submit.pCommandBuffers = &cb;
+
+            vkQueueSubmit(_graphicsQueue, 1, &submit, VK_NULL_HANDLE);
+            vkQueueWaitIdle(_graphicsQueue);
+
+            vkFreeCommandBuffers(_device, _commandPool, 1, &cb);
+        }
+        vmaDestroyBuffer(_vmaAllocator, stagingBuffer, stagingAlloc);
     }
 
     _vkReady = true;
@@ -577,8 +833,47 @@ void EngineVK::ShutdownVulkan()
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         if (_inFlightFences[i]) vkDestroyFence(_device, _inFlightFences[i], nullptr);
-        if (_renderFinishedSem[i]) vkDestroySemaphore(_device, _renderFinishedSem[i], nullptr);
         if (_imageAvailableSem[i]) vkDestroySemaphore(_device, _imageAvailableSem[i], nullptr);
+    }
+
+    for (size_t i = 0; i < _renderFinishedSem.size(); i++)
+    {
+        if (_renderFinishedSem[i]) vkDestroySemaphore(_device, _renderFinishedSem[i], nullptr);
+    }
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        if (_ibo[i])
+        {
+            vmaDestroyBuffer(_vmaAllocator, _ibo[i], _iboAllocation[i]);
+            _ibo[i] = VK_NULL_HANDLE;
+        }
+        if (_vbo[i])
+        {
+            vmaDestroyBuffer(_vmaAllocator, _vbo[i], _vboAllocation[i]);
+            _vbo[i] = VK_NULL_HANDLE;
+        }
+    }
+
+    if (_fallbackWhiteImageView)
+    {
+        vkDestroyImageView(_device, _fallbackWhiteImageView, nullptr);
+        _fallbackWhiteImageView = VK_NULL_HANDLE;
+    }
+    if (_fallbackWhiteArrayImageView)
+    {
+        vkDestroyImageView(_device, _fallbackWhiteArrayImageView, nullptr);
+        _fallbackWhiteArrayImageView = VK_NULL_HANDLE;
+    }
+    if (_fallbackWhiteImage)
+    {
+        vmaDestroyImage(_vmaAllocator, _fallbackWhiteImage, _fallbackWhiteAllocation);
+        _fallbackWhiteImage = VK_NULL_HANDLE;
+    }
+    if (_defaultSampler)
+    {
+        vkDestroySampler(_device, _defaultSampler, nullptr);
+        _defaultSampler = VK_NULL_HANDLE;
     }
 
     if (_commandPool) vkDestroyCommandPool(_device, _commandPool, nullptr);
@@ -591,7 +886,6 @@ void EngineVK::ShutdownVulkan()
     for (auto iv : _swapchainImageViews)
         vkDestroyImageView(_device, iv, nullptr);
 
-    // shadow pipeline cleanup
     if (_shadowSolidPipeline != VK_NULL_HANDLE)
     {
         vkDestroyPipeline(_device, _shadowSolidPipeline, nullptr);
@@ -614,7 +908,6 @@ void EngineVK::ShutdownVulkan()
     }
     _shadowPipelineRenderPass = VK_NULL_HANDLE;
 
-    // shadow map cleanup
     if (!_shadowLayerViews.empty())
     {
         for (auto view : _shadowLayerViews)

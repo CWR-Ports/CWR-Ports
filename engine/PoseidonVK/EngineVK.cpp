@@ -2,20 +2,6 @@
  * PoseidonVK Vulkan rendering engine bootstrap implementation
  */
 
-// this file acts as the bootstrap phase for poseidonvk the vulkan renderer backend
-//
-// we are shifting to vulkan on android to bypass the overhead driver bugs
-// and lack of modern extensions in the latest adreno and mali opengl es drivers
-// this port will allow us to manage memory pools directly using vma handle
-// staging ring buffers for dynamic geometry without cpu stalls and avoid complex
-// driver fallback paths like manual bcdec transcoding for s3tc and dxt formats
-//
-// this skeleton handles factory registration building and target linking
-// before we start implementing the vulkan pipelines descriptor sets swapchains
-// and render passes
-//
-// I DO NOT YET KNOW IF THIS WILL BE FEASIBLE AT ALL BUT LETS SEE
-
 #include <Poseidon/Dev/Debug/DebugOverlay.hpp>
 #include <PoseidonVK/TextBankVK.hpp>
 #include <PoseidonVK/EngineVK.hpp>
@@ -23,9 +9,17 @@
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Graphics/Shared/WindowPlacement.hpp>
 #include <Poseidon/Graphics/Rendering/Frame/Frame.hpp>
+#include <Poseidon/Graphics/Shared/ScreenshotWriter.hpp>
+
+#include <Poseidon/Graphics/Core/MatrixConversion.hpp>
+#include <Poseidon/World/Scene/Scene.hpp>
+#include <Poseidon/World/Scene/Camera/Camera.hpp>
 
 namespace Poseidon
 {
+int g_emitDrawCalls = 0;
+int g_flushQueueCalls = 0;
+
 Engine* CreateEngineVK(int width, int height, bool windowed, int bpp)
 {
     EngineVK* engine = new EngineVK(width, height, windowed, bpp);
@@ -55,6 +49,9 @@ EngineVK::EngineVK(int width, int height, bool windowed, int bpp)
     InitVulkan();
     InitShaders();
     InitPipelineLayouts();
+
+    _activePassId = PassId::Opaque;
+    BeginScreenPass();
 }
 
 EngineVK::~EngineVK()
@@ -87,6 +84,19 @@ void EngineVK::InitDraw(bool clear, PackedColor color)
     vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
     vkResetFences(_device, 1, &_inFlightFences[_currentFrame]);
 
+    _queueNo._firstVertex = true;
+    _queueNo._firstIndex = true;
+    _queueNo._vertexBufferUsed = 0;
+    _queueNo._indexBufferUsed = 0;
+    _vboUploadedVerts = 0;
+
+    if (_materialDescriptorPool[_currentFrame] != VK_NULL_HANDLE)
+    {
+        vkResetDescriptorPool(_device, _materialDescriptorPool[_currentFrame], 0);
+    }
+    _materialDescriptorCache[_currentFrame].clear();
+    _uniformOffset = 0;
+
     VkResult result = vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX,
                                             _imageAvailableSem[_currentFrame],
                                             VK_NULL_HANDLE, &_currentImageIndex);
@@ -109,16 +119,18 @@ void EngineVK::InitDraw(bool clear, PackedColor color)
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = _swapchainExtent;
 
-    VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+    VkClearValue clearValues[2] = {};
+    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+    clearValues[1].depthStencil = {1.0f, 0};
     if (clear)
     {
         float r = ((color >> 16) & 0xFF) / 255.0f;
         float g = ((color >> 8) & 0xFF) / 255.0f;
         float b = (color & 0xFF) / 255.0f;
-        clearColor.color = {{r, g, b, 1.0f}};
+        clearValues[0].color = {{r, g, b, 1.0f}};
     }
-    renderPassInfo.clearValueCount = 1;
-    renderPassInfo.pClearValues = &clearColor;
+    renderPassInfo.clearValueCount = 2;
+    renderPassInfo.pClearValues = clearValues;
 
     vkCmdBeginRenderPass(cb, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -157,11 +169,13 @@ void EngineVK::NextFrame()
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &cb;
 
-    VkSemaphore signalSemaphores[] = {_renderFinishedSem[_currentFrame]};
+    VkSemaphore signalSemaphores[] = {_renderFinishedSem[_currentImageIndex]};
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
     vkQueueSubmit(_graphicsQueue, 1, &submitInfo, _inFlightFences[_currentFrame]);
+
+    CaptureScreenshotIfPending();
 
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -174,6 +188,10 @@ void EngineVK::NextFrame()
     presentInfo.pImageIndices = &_currentImageIndex;
 
     vkQueuePresentKHR(_presentQueue, &presentInfo);
+
+    LOG_INFO(Graphics, "VK Frame summary: EmitDraw = {}, FlushQueue = {}", g_emitDrawCalls, g_flushQueueCalls);
+    g_emitDrawCalls = 0;
+    g_flushQueueCalls = 0;
 
     _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 
@@ -225,6 +243,8 @@ void EngineVK::OnWindowResized(int w, int h)
 {
     _w = w;
     _h = h;
+    _vsConstants.vpScale[0] = 2.0f / static_cast<float>(_w);
+    _vsConstants.vpScale[1] = 2.0f / static_cast<float>(_h);
 }
 
 void EngineVK::OnFullscreenChanged(bool windowed)
@@ -298,6 +318,27 @@ RString EngineVK::GetRendererName() const
     return "Vulkan Stub Renderer";
 }
 
+bool EngineVK::GetTL() const
+{
+    return true; // Register hardware T&L capabilities with factory core
+}
+
+bool EngineVK::GetTLOnSurface() const
+{
+    return true; // Expose hardware processing on split decal terrains
+}
+
+void EngineVK::UpdateProjection()
+{
+    if (IsIn3DPass() && GScene)
+    {
+        FlushAndFreeAllQueues(_queueNo, true); // Commit pipeline queues prior to viewport modifications
+        Camera* camera = GScene->GetCamera();
+        ConvertProjectionMatrix(_frameState.projection, camera->ProjectionNormal(), _bias); // Re-align view frustums
+        std::memcpy(_vsConstants.proj, &_frameState.projection, 64);
+    }
+}
+
 bool EngineVK::IsResizable() const
 {
     return true;
@@ -314,6 +355,32 @@ void EngineVK::Clear(bool clearZ, bool clear, PackedColor color)
 
 void EngineVK::FogColorChanged(ColorVal fogColor)
 {
+    _psConstants.fogColor[0] = fogColor.R();
+    _psConstants.fogColor[1] = fogColor.G();
+    _psConstants.fogColor[2] = fogColor.B();
+    _psConstants.fogColor[3] = 1.0f;
+}
+
+void EngineVK::EnableNightEye(float night)
+{
+    if (fabs(_nightEye - night) < 0.01f)
+        return;
+    FlushQueues();
+    _nightEye = night;
+    if (_nightEye > 0.01f)
+    {
+        _psConstants.rgbEyeCoef[0] = 0.2f;
+        _psConstants.rgbEyeCoef[1] = 0.9f;
+        _psConstants.rgbEyeCoef[2] = 0.4f;
+        _psConstants.rgbEyeCoef[3] = 1.0f - _nightEye;
+    }
+    else
+    {
+        _psConstants.rgbEyeCoef[0] = 0.0f;
+        _psConstants.rgbEyeCoef[1] = 0.0f;
+        _psConstants.rgbEyeCoef[2] = 0.0f;
+        _psConstants.rgbEyeCoef[3] = 1.0f;
+    }
 }
 
 void EngineVK::SetGamma(float g)
@@ -349,7 +416,7 @@ void EngineVK::GetZCoefs(float& zAdd, float& zMult)
 
 bool EngineVK::CanZBias() const
 {
-    return true;
+    return false; // Force software polygon depth sorting in transLight
 }
 
 bool EngineVK::ZBiasExclusion() const
@@ -382,6 +449,220 @@ void EngineVK::SetMouseGrab(bool grab)
 bool EngineVK::IsMouseGrabbed() const
 {
     return false;
+}
+
+void EngineVK::Screenshot(RString filename)
+{
+    _pendingScreenshotPath = filename;
+}
+
+void EngineVK::FlushPendingScreenshot()
+{
+    CaptureScreenshotIfPending();
+}
+
+void EngineVK::CaptureScreenshotIfPending()
+{
+    if (_pendingScreenshotPath.GetLength() == 0)
+        return;
+
+    RString path = _pendingScreenshotPath;
+    _pendingScreenshotPath = "";
+
+    std::vector<uint8_t> pixels;
+    int w = 0;
+    int h = 0;
+    if (!ReadPixelsFromSwapchain(pixels, w, h))
+        return;
+
+    std::vector<uint8_t> rgb(w * h * 3);
+    const bool isBGRA = (_swapchainFormat == VK_FORMAT_B8G8R8A8_UNORM || _swapchainFormat == VK_FORMAT_B8G8R8A8_SRGB);
+
+    for (int i = 0; i < w * h; i += 1)
+    {
+        if (isBGRA)
+        {
+            rgb[i * 3 + 0] = pixels[i * 4 + 2];
+            rgb[i * 3 + 1] = pixels[i * 4 + 1];
+            rgb[i * 3 + 2] = pixels[i * 4 + 0];
+        }
+        else
+        {
+            rgb[i * 3 + 0] = pixels[i * 4 + 0];
+            rgb[i * 3 + 1] = pixels[i * 4 + 1];
+            rgb[i * 3 + 2] = pixels[i * 4 + 2];
+        }
+    }
+
+    ScreenshotWriter::WriteRGB(path, w, h, rgb.data());
+}
+
+int EngineVK::SampleBackBufferNonBlack()
+{
+    if (!_vkReady)
+        return -1;
+
+    std::vector<uint8_t> pixels;
+    int w = 0;
+    int h = 0;
+    if (!ReadPixelsFromSwapchain(pixels, w, h))
+        return -1;
+
+    int nonBlack = 0;
+    for (int sy = 0; sy < 16; sy += 1)
+    {
+        int y = h * sy / 16;
+        for (int sx = 0; sx < 16; sx += 1)
+        {
+            int x = w * sx / 16;
+            int idx = (y * w + x) * 4;
+            if (pixels[idx + 0] > 2 || pixels[idx + 1] > 2 || pixels[idx + 2] > 2)
+                nonBlack += 1;
+        }
+    }
+    return nonBlack;
+}
+
+bool EngineVK::SamplePixel(int x, int y, uint8_t* outRGB)
+{
+    if (!_vkReady || !outRGB)
+        return false;
+
+    std::vector<uint8_t> pixels;
+    int w = 0;
+    int h = 0;
+    if (!ReadPixelsFromSwapchain(pixels, w, h))
+        return false;
+
+    if (x < 0 || y < 0 || x >= w || y >= h)
+        return false;
+
+    int idx = (y * w + x) * 4;
+    const bool isBGRA = (_swapchainFormat == VK_FORMAT_B8G8R8A8_UNORM || _swapchainFormat == VK_FORMAT_B8G8R8A8_SRGB);
+    if (isBGRA)
+    {
+        outRGB[0] = pixels[idx + 2];
+        outRGB[1] = pixels[idx + 1];
+        outRGB[2] = pixels[idx + 0];
+    }
+    else
+    {
+        outRGB[0] = pixels[idx + 0];
+        outRGB[1] = pixels[idx + 1];
+        outRGB[2] = pixels[idx + 2];
+    }
+    return true;
+}
+
+bool EngineVK::ReadPixelsFromSwapchain(std::vector<uint8_t>& outRGBA, int& outW, int& outH)
+{
+    if (!_vkReady)
+        return false;
+
+    vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
+
+    VkImage srcImage = _swapchainImages[_currentImageIndex];
+    uint32_t width = _swapchainExtent.width;
+    uint32_t height = _swapchainExtent.height;
+
+    outW = static_cast<int>(width);
+    outH = static_cast<int>(height);
+
+    VkDeviceSize imageSize = width * height * 4;
+    outRGBA.resize(imageSize);
+
+    VkBuffer stagingBuffer = VK_NULL_HANDLE;
+    VmaAllocation stagingAlloc = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = imageSize;
+    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
+    allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    VmaAllocationInfo allocResult{};
+    if (vmaCreateBuffer(_vmaAllocator, &bufferInfo, &allocInfo, &stagingBuffer, &stagingAlloc, &allocResult) != VK_SUCCESS)
+    {
+        LOG_ERROR(Graphics, "PoseidonVK: Failed to create screenshot staging buffer");
+        return false;
+    }
+
+    VkCommandBufferAllocateInfo cmdAlloc{};
+    cmdAlloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmdAlloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmdAlloc.commandPool = _commandPool;
+    cmdAlloc.commandBufferCount = 1;
+
+    VkCommandBuffer cb = VK_NULL_HANDLE;
+    if (vkAllocateCommandBuffers(_device, &cmdAlloc, &cb) != VK_SUCCESS)
+    {
+        vmaDestroyBuffer(_vmaAllocator, stagingBuffer, stagingAlloc);
+        return false;
+    }
+
+    VkCommandBufferBeginInfo begin{};
+    begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cb, &begin);
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = srcImage;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+    vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {0, 0, 0};
+    region.imageExtent = {width, height, 1};
+
+    vkCmdCopyImageToBuffer(cb, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, 1, &region);
+
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    vkEndCommandBuffer(cb);
+
+    VkSubmitInfo submit{};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &cb;
+
+    vkQueueSubmit(_graphicsQueue, 1, &submit, VK_NULL_HANDLE);
+    vkQueueWaitIdle(_graphicsQueue);
+
+    vkFreeCommandBuffers(_device, _commandPool, 1, &cb);
+
+    vmaInvalidateAllocation(_vmaAllocator, stagingAlloc, 0, VK_WHOLE_SIZE);
+    std::memcpy(outRGBA.data(), allocResult.pMappedData, imageSize);
+
+    vmaDestroyBuffer(_vmaAllocator, stagingBuffer, stagingAlloc);
+    return true;
 }
 
 } // namespace Poseidon
