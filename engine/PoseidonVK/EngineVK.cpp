@@ -111,6 +111,14 @@ void EngineVK::InitDraw(bool clear, PackedColor color)
         // TODO: handle swapchain recreation
     }
 
+    // With more swapchain images than frames in flight, the acquired image may
+    // still be in use by another in-flight frame (they share one depth buffer).
+    // Wait on the fence of whichever frame last rendered to this image before
+    // reusing it. Without this the two frames race and the image flickers.
+    if (_imagesInFlight[_currentImageIndex] != VK_NULL_HANDLE)
+        vkWaitForFences(_device, 1, &_imagesInFlight[_currentImageIndex], VK_TRUE, UINT64_MAX);
+    _imagesInFlight[_currentImageIndex] = _inFlightFences[_currentFrame];
+
     VkCommandBuffer cb = _commandBuffers[_currentFrame];
     vkResetCommandBuffer(cb, 0);
 

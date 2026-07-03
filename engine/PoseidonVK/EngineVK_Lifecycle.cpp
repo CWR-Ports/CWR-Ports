@@ -549,6 +549,7 @@ bool EngineVK::CreateSyncObjects()
     _imageAvailableSem.resize(MAX_FRAMES_IN_FLIGHT);
     _renderFinishedSem.resize(_swapchainImages.size());
     _inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+    _imagesInFlight.assign(_swapchainImages.size(), VK_NULL_HANDLE);
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {

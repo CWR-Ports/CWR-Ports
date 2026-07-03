@@ -232,6 +232,7 @@ protected:
     std::vector<VkSemaphore> _imageAvailableSem;
     std::vector<VkSemaphore> _renderFinishedSem;
     std::vector<VkFence> _inFlightFences;
+    std::vector<VkFence> _imagesInFlight; // per-swapchain-image fence guard (which frame last used each image)
     uint32_t _currentFrame = 0;
     uint32_t _currentImageIndex = 0;
     bool _frameOpen = false;
