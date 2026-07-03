@@ -458,9 +458,15 @@ void EngineVK::BeginPass(Poseidon::PassId passId)
         std::memcpy(_vsConstants.sunDir, _frameState.sunDir, 16);
         _vsConstants.sunEn[0] = _frameState.sunEnabled ? 1.0f : 0.0f;
         std::memcpy(_vsConstants.fogParam, _frameState.fogParams, 16);
-        _vsConstants.camPos[0] = _frameState.cameraPos[0];
-        _vsConstants.camPos[1] = _frameState.cameraPos[1];
-        _vsConstants.camPos[2] = _frameState.cameraPos[2];
+        // Geometry is rendered camera-relative (the world matrix carries
+        // objectPos - cameraPos and the view translation is zeroed), so the
+        // camera sits at the origin in that space. The transform shader uses
+        // camPos for fog distance and specular view direction; passing the
+        // absolute camera position made every fog distance huge and fogged the
+        // whole world to the fog colour.
+        _vsConstants.camPos[0] = 0.0f;
+        _vsConstants.camPos[1] = 0.0f;
+        _vsConstants.camPos[2] = 0.0f;
         _vsConstants.camPos[3] = 0.0f;
 
         std::memcpy(_psConstants.fogColor, _frameState.fogColor, 16);

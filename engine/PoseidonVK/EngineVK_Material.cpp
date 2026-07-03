@@ -35,17 +35,22 @@ void EngineVK::SetMaterial(const TLMaterial& mat, const LightList& lights, const
     _vsConstants.sunEn[2] = 0.0f;
     _vsConstants.sunEn[3] = 0.0f;
     
-    Color diffuse = (mat.specFlags & 0x1) ? mat.forcedDiffuse : mat.diffuse; // fallback flag for diffuse
-    
-    _vsConstants.diffuse[0] = diffuse.R();
-    _vsConstants.diffuse[1] = diffuse.G();
-    _vsConstants.diffuse[2] = diffuse.B();
-    _vsConstants.diffuse[3] = diffuse.A();
-    
-    _vsConstants.ambient[0] = mat.ambient.R();
-    _vsConstants.ambient[1] = mat.ambient.G();
-    _vsConstants.ambient[2] = mat.ambient.B();
-    _vsConstants.ambient[3] = mat.ambient.A();
+    // Fold the sun's light colour into the material, matching the GLES backend
+    // (UploadVSMaterialConstants). Using the raw material colours left meshes
+    // unlit/black because the shader gates ambient+diffuse by sunEn and expects
+    // them to already carry the sun's contribution.
+    Color dif = sun->Diffuse() * mat.diffuse;
+    Color amb = sun->Ambient() * mat.ambient + sun->Diffuse() * mat.forcedDiffuse;
+
+    _vsConstants.diffuse[0] = dif.R();
+    _vsConstants.diffuse[1] = dif.G();
+    _vsConstants.diffuse[2] = dif.B();
+    _vsConstants.diffuse[3] = dif.A();
+
+    _vsConstants.ambient[0] = amb.R();
+    _vsConstants.ambient[1] = amb.G();
+    _vsConstants.ambient[2] = amb.B();
+    _vsConstants.ambient[3] = amb.A();
     
     _vsConstants.emissive[0] = mat.emmisive.R();
     _vsConstants.emissive[1] = mat.emmisive.G();
