@@ -418,6 +418,14 @@ void EngineVK::ApplyPassState(TextureVK* tex, int level, const Poseidon::render:
     _activeTexture0 = tex;
     _activeLevel = level;
     _activeSpec = spec;
+
+    // Fog is disabled for these passes (matches BuildPassState fogMode). The sky,
+    // cockpit and light passes must not be fogged or they get painted with the
+    // fog color; the sky in particular was rendering solid black.
+    const bool fogEnabled = !(passId == PassId::Sky || passId == PassId::Cockpit ||
+                              passId == PassId::Light || passId == PassId::Shadow ||
+                              passId == PassId::ScreenSpace);
+    _vsConstants.fogParam[2] = fogEnabled ? 1.0f : 0.0f;
 }
 
 void EngineVK::ApplyDescriptorPSState(const render::RenderPassDescriptor& d, PipelineVertexInput vertexInput)
