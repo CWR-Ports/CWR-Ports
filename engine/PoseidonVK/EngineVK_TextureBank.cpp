@@ -233,12 +233,13 @@ MipInfo TextBankVK::UseMipmap(Texture* absTexture, int level, int top)
     saturateMin(top, level);
     saturateMax(level, top);
 
-    if (texture->_levelLoaded > level)
+    // Demand-load to the GPU. A freshly created texture has _levelLoaded == -1
+    // (nothing resident); the old `_levelLoaded > level` gate never fired for
+    // that case, so meshes kept sampling the white fallback. Load whenever
+    // nothing is resident yet, or the resident level is coarser than needed.
+    if (texture->_src && (texture->_levelLoaded < 0 || texture->_levelLoaded > level))
     {
-        if (texture->_src)
-        {
-            texture->LoadLevels(top);
-        }
+        texture->LoadLevels(top);
     }
 
     int loadedLevel = texture->_levelLoaded >= 0 ? texture->_levelLoaded : 0;

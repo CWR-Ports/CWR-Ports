@@ -58,6 +58,12 @@ EngineVK::~EngineVK()
 {
     LOG_INFO(Graphics, "PoseidonVK: Destroying Vulkan engine");
 
+    // Wait for the GPU to finish all in-flight work before tearing down any
+    // resources — the pipeline cache, descriptor buffers, and shader modules
+    // freed below may still be referenced by the last submitted command buffer.
+    if (_device != VK_NULL_HANDLE)
+        vkDeviceWaitIdle(_device);
+
     delete _textBank;
     _textBank = nullptr;
 

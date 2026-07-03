@@ -426,6 +426,12 @@ void EngineVK::BindPipelineStateAndDescriptors(VkCommandBuffer cb, const Pipelin
     scissor.extent = _swapchainExtent;
     vkCmdSetScissor(cb, 0, 1, &scissor);
 
+    // OnSurface (road/decal/footprint) pipelines enable depth bias as dynamic
+    // state; it must be set or the draw is invalid. Mirrors the GLES decal
+    // glPolygonOffset(-1, -1): slopeFactor and constantFactor both -1.
+    if (key.desc.surface == render::SurfaceMode::OnSurface)
+        vkCmdSetDepthBias(cb, -1.0f, 0.0f, -1.0f);
+
     uint32_t dynamicOffsets[3] = { _uniformOffsetVS, _uniformOffsetWorld, _uniformOffsetPS };
     vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_globalDescriptorSet[_currentFrame], 3, dynamicOffsets);
 
