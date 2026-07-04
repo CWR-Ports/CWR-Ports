@@ -458,20 +458,25 @@ void EngineVK::TextureDestroyed(Texture* tex)
 
 void EngineVK::HandleEvents()
 {
+    // Pump SDL events through the shared event window. Without this SDL never
+    // processes input, so keyboard and mouse do nothing and the window ignores
+    // close/resize/focus. Mirrors the GL33 and GLES32 backends.
+    _eventWindow.HandleEvents();
 }
 
 bool EngineVK::IsOpen() const
 {
-    return true;
+    return _eventWindow.IsOpen();
 }
 
 void EngineVK::SetMouseGrab(bool grab)
 {
+    _eventWindow.SetMouseGrab(grab);
 }
 
 bool EngineVK::IsMouseGrabbed() const
 {
-    return false;
+    return _eventWindow.IsMouseGrabbed();
 }
 
 void EngineVK::Screenshot(RString filename)
