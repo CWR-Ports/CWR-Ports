@@ -369,6 +369,15 @@ void EngineVK::Clear(bool clearZ, bool clear, PackedColor color)
 
 void EngineVK::FogColorChanged(ColorVal fogColor)
 {
+    // Keep the cached frame state in sync so BeginPass does not overwrite the
+    // fog color with a stale value. GLES does the same in its FogColorChanged;
+    // without it the fog color lagged (defaulting to black) and everything fogged
+    // to black, including the sky.
+    _frameState.fogColor[0] = fogColor.R();
+    _frameState.fogColor[1] = fogColor.G();
+    _frameState.fogColor[2] = fogColor.B();
+    _frameState.fogColor[3] = 1.0f;
+
     _psConstants.fogColor[0] = fogColor.R();
     _psConstants.fogColor[1] = fogColor.G();
     _psConstants.fogColor[2] = fogColor.B();

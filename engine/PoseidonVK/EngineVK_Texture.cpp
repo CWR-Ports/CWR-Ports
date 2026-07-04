@@ -378,6 +378,26 @@ bool TextureVK::VerifyChecksum(const Poseidon::MipInfo& mip) const
     return true;
 }
 
+// Sample a pixel from the source image. The scene derives the sky and fog
+// colors from this (skyTexture->GetPixel), so the old stub returning black made
+// the fog color black and fogged the sky and distance to black. Mirrors the
+// GLES backend; falls back to white (never black) if the source is unavailable.
+Poseidon::Color TextureVK::GetPixel(int level, float u, float v) const
+{
+    if (!_src || _nMipmaps <= 0)
+        return HWhite;
+    if (level < 0)
+        level = 0;
+    if (level >= _nMipmaps)
+        level = _nMipmaps - 1;
+    PacLevelMem mip = _mipmaps[level];
+    if (mip._h <= 0 || mip._pitch <= 0)
+        return HWhite;
+    std::vector<char> mem(static_cast<size_t>(mip._pitch) * mip._h);
+    _src->GetMipmapData(mem.data(), mip, level);
+    return Color(mip.GetPixel(mem.data(), u, v));
+}
+
 int TextureVK::AWidth(int level) const { return _surface._w > 0 ? _surface._w : (_src ? _mipmaps[0]._w : 0); }
 int TextureVK::AHeight(int level) const { return _surface._h > 0 ? _surface._h : (_src ? _mipmaps[0]._h : 0); }
 int TextureVK::Size() const { return _surface._usedSize; }

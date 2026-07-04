@@ -40,7 +40,6 @@ void VertexBufferVK::CopyVertices(const Shape& src)
     const Vector3* pos = &src.Pos(0);
     const Vector3* norm = &src.Norm(0);
     
-    SVertex* base = static_cast<SVertex*>(mapped);
     for (int i = src.NVertex(); --i >= 0;)
     {
         sData->pos = Vector3P(pos->X(), pos->Y(), pos->Z());
@@ -51,19 +50,6 @@ void VertexBufferVK::CopyVertices(const Shape& src)
         sData->t0 = *uv;
         uv++;
         sData++;
-    }
-
-    {
-        static int s_dbg = 0;
-        if (s_dbg < 4 && src.NVertex() >= 3)
-        {
-            LOG_INFO(Graphics, "VK VBCOPY#{}: nVert={} stride={} src0=[{:.2f},{:.2f},{:.2f}] "
-                     "dst0=[{:.2f},{:.2f},{:.2f}] dst1=[{:.2f},{:.2f},{:.2f}] dst2=[{:.2f},{:.2f},{:.2f}] uv0=[{:.3f},{:.3f}]",
-                     s_dbg, src.NVertex(), (int)sizeof(SVertex), src.Pos(0).X(), src.Pos(0).Y(), src.Pos(0).Z(),
-                     base[0].pos.X(), base[0].pos.Y(), base[0].pos.Z(), base[1].pos.X(), base[1].pos.Y(), base[1].pos.Z(),
-                     base[2].pos.X(), base[2].pos.Y(), base[2].pos.Z(), base[0].t0.u, base[0].t0.v);
-            s_dbg++;
-        }
     }
 
     vmaUnmapMemory(_allocator, _vboAllocation);

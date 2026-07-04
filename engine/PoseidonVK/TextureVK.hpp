@@ -159,7 +159,7 @@ class TextureVK : public Texture
     Poseidon::AbstractMipmapLevel& AMipmap(int level) override;
     const Poseidon::AbstractMipmapLevel& AMipmap(int level) const override;
     void ASetNMipmaps(int n) override { _nMipmaps = n; }
-    Poseidon::Color GetPixel(int level, float u, float v) const override { return Poseidon::Color(0); }
+    Poseidon::Color GetPixel(int level, float u, float v) const override;
     bool IsTransparent() const override { return false; }
     Poseidon::Color GetColor() override { return Poseidon::Color(0); }
     Poseidon::AlphaStats::Kind GetAlphaClass() override;
