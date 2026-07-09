@@ -148,6 +148,9 @@ void EngineVK::InitDraw(bool clear, PackedColor color)
 
     vkCmdBeginRenderPass(cb, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+    if (_textBank)
+        _textBank->StartFrame();
+
     base::InitDraw();
     _frameOpen = true;
 }
@@ -158,6 +161,8 @@ void EngineVK::FinishDraw()
 
     base::FinishDraw();
     base::DrawFinishTexts();
+
+    CloseAllQueues(_queueNo);
 
     _frameCounter++;
     _frameOpen = false;

@@ -1,9 +1,13 @@
 #include <PoseidonVK/TextBankVK.hpp>
 #include <PoseidonVK/EngineVK.hpp>
 
+#include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/IO/Streams/QBStream.hpp>
 #include <Poseidon/Graphics/Textures/LooseTextures.hpp>
 #include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/Foundation/Common/FltOpts.hpp>
+
+extern ParamFile Remaster;
 
 namespace Poseidon {
 
@@ -16,7 +20,43 @@ TextBankVK::~TextBankVK()
     ReleaseAllTextures();
 }
 
-void TextBankVK::StartFrame() {}
+void TextBankVK::StartFrame()
+{
+    InitDetailTextures();
+}
+
+// load multitexturing textures named in CfgDetailTextures
+// the Detail/Grass pixel shaders modulate by tex1 (rgb *= t1.a * 2), so leaving unit 1 on the white fallback
+// doubles the brightness of every terrain draw and washes the ground out.
+// loading goes through the bank's own Load() so the textures use the normal demand-load path.
+void TextBankVK::InitDetailTextures()
+{
+    if (_detail)
+        return;
+
+    const ParamEntry& names = Remaster >> "CfgDetailTextures";
+
+    auto loadDetail = [this](RStringB name) -> Ref<TextureVK>
+    {
+        if (!QIFStreamB::FileExist(name))
+            return nullptr;
+        Ref<Texture> tex = Load(name);
+        if (!tex)
+            return nullptr;
+        TextureVK* vkTex = static_cast<TextureVK*>(tex.GetRef());
+        vkTex->_isDetail = true;
+        return vkTex;
+    };
+
+    _detail = loadDetail(names >> "detail");
+    _specular = loadDetail(names >> "specular");
+    _grass = loadDetail(names >> "grass");
+    if (_grass)
+        _grass->SetMaxSize(1024);
+    _waterBump = loadDetail(names >> "waterBump");
+    if (_waterBump)
+        _waterBump->SetMaxSize(1024);
+}
 void TextBankVK::FinishFrame() {}
 void TextBankVK::Compact() {}
 void TextBankVK::Preload() {}

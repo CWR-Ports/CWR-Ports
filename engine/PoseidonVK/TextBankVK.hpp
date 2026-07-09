@@ -22,6 +22,12 @@ class TextBankVK : public AbstractTextBank
 
     AutoArray<SurfaceInfoVK> _freeSurfaces;
 
+    Ref<TextureVK> _detail;
+    Ref<TextureVK> _grass;
+    Ref<TextureVK> _specular;
+    Ref<TextureVK> _waterBump;
+    void InitDetailTextures();
+
   public:
     TextBankVK(EngineVK* engine);
     ~TextBankVK() override;
@@ -48,6 +54,11 @@ class TextBankVK : public AbstractTextBank
     bool VerifyChecksums();
     
     int GetTotalAllocated() const { return _totalAllocated; }
+
+    TextureVK* GetDetailTexture() const { return _detail; }
+    TextureVK* GetGrassTexture() const { return _grass; }
+    TextureVK* GetSpecularTexture() const { return _specular; }
+    TextureVK* GetWaterBumpTexture() const { return _waterBump; }
 
   private:
     int Find(RStringB name, TextureVK* interpolate);

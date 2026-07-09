@@ -270,10 +270,13 @@ bool EngineVK::CreateSwapchain()
 {
     SwapchainSupport ss = QuerySwapchainSupport(_physicalDevice, _surface);
 
+    // he shaders already output display-ready values (the GL
+    // backends render to a non-sRGB framebuffer), an sRGB swapchain re-encodes
+    // on write and washes the whole scene out.
     VkSurfaceFormatKHR fmt = ss.formats[0];
     for (auto& f : ss.formats)
     {
-        if (f.format == VK_FORMAT_B8G8R8A8_SRGB && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        if (f.format == VK_FORMAT_B8G8R8A8_UNORM && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
         {
             fmt = f;
             break;

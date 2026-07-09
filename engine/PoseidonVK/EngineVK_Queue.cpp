@@ -1,5 +1,7 @@
 #include <PoseidonVK/EngineVK.hpp>
 #include <PoseidonVK/TextureVK.hpp>
+#include <PoseidonVK/TextBankVK.hpp>
+#include <Poseidon/Core/Global.hpp>
 #include <Poseidon/Graphics/Core/FanDecompose.hpp>
 #include <Poseidon/Graphics/Rendering/BuildRenderPassDescriptor.hpp>
 #include <Poseidon/World/Scene/Scene.hpp>
@@ -413,6 +415,33 @@ void EngineVK::ApplyPassState(TextureVK* tex, int level, const Poseidon::render:
     const render::RenderPassDescriptor desc = render::BuildRenderPassDescriptor(spec, ctx);
     ApplyDescriptorPSState(desc, vertexInput);
 
+    // resolve unit-1 texture for this draw, mirroring the GLES SetTexture/SetMultiTexturing pair
+    TextureVK* tex1 = nullptr;
+    if (IsMultitexturing() && vertexInput != PipelineVertexInput::Screen)
+    {
+        TextBankVK* bank = static_cast<TextBankVK*>(_textBank);
+        if (desc.shader == render::ShaderFamily::Water)
+            tex1 = bank->GetWaterBumpTexture();
+        else if (render::Has(spec.backend, render::Backend::GrassTexture))
+            tex1 = bank->GetGrassTexture();
+        else if (render::Has(spec.backend, render::Backend::DetailTexture))
+            tex1 = bank->GetDetailTexture();
+        else if (render::Has(spec.backend, render::Backend::SpecularTexture))
+            tex1 = bank->GetSpecularTexture();
+    }
+    if (tex1)
+    {
+        _textBank->UseMipmap(tex1, 0, 0);
+        _lastTexture1Handle = tex1->GetSurface().GetCreationID();
+    }
+    else
+    {
+        _lastTexture1Handle = 0;
+    }
+    _activeTexture1 = tex1;
+
+    ApplyTexGen(desc.texGen);
+
     _activePassId = passId;
     _pipelineVertexInput = vertexInput;
     _activeTexture0 = tex;
@@ -426,6 +455,45 @@ void EngineVK::ApplyPassState(TextureVK* tex, int level, const Poseidon::render:
                               passId == PassId::Light || passId == PassId::Shadow ||
                               passId == PassId::ScreenSpace);
     _vsConstants.fogParam[2] = fogEnabled ? 1.0f : 0.0f;
+}
+
+void EngineVK::ApplyTexGen(render::TexGenMode mode)
+{
+    static const float identity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    static const float scale32[16] = {32, 0, 0, 0, 0, 32, 0, 0, 0, 0, 32, 0, 0, 0, 0, 1};
+    static const float scale64[16] = {64, 0, 0, 0, 0, 64, 0, 0, 0, 0, 64, 0, 0, 0, 0, 1};
+
+    if (mode == render::TexGenMode::Detail || mode == render::TexGenMode::Grass)
+    {
+        _vsConstants.texCtrl[0] = 0.0f;
+        _vsConstants.texCtrl[1] = 1.0f;
+        std::memcpy(_vsConstants.texMat1, scale32, sizeof(scale32));
+    }
+    else if (mode == render::TexGenMode::Water)
+    {
+        float move[16];
+        std::memcpy(move, identity, sizeof(move));
+        float zoomAndMove[16];
+        std::memcpy(zoomAndMove, scale64, sizeof(zoomAndMove));
+
+        const float t = Glob.time.toFloat();
+        const float mw1 = sinf(t * 0.04f);
+        const float mw2 = fmodf(t * 0.3f + sinf(t * 0.5f) * 0.5f, 2.0f);
+        move[8] = mw1 * 0.5f;
+        move[9] = mw1;
+        zoomAndMove[8] = mw2 * 0.5f;
+        zoomAndMove[9] = mw2;
+
+        _vsConstants.texCtrl[0] = 1.0f;
+        _vsConstants.texCtrl[1] = 1.0f;
+        std::memcpy(_vsConstants.texMat0, move, sizeof(move));
+        std::memcpy(_vsConstants.texMat1, zoomAndMove, sizeof(zoomAndMove));
+    }
+    else
+    {
+        _vsConstants.texCtrl[0] = 0.0f;
+        _vsConstants.texCtrl[1] = 0.0f;
+    }
 }
 
 void EngineVK::ApplyDescriptorPSState(const render::RenderPassDescriptor& d, PipelineVertexInput vertexInput)

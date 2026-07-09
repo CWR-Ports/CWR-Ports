@@ -415,6 +415,7 @@ protected:
 
     void ApplyPassState(TextureVK* tex, int level, const Poseidon::render::LegacySpec& spec, Poseidon::PassId passId, PipelineVertexInput vertexInput);
     void ApplyDescriptorPSState(const render::RenderPassDescriptor& d, PipelineVertexInput vertexInput);
+    void ApplyTexGen(render::TexGenMode mode);
 
     WORD* QueueAdd(QueueVK& queue, int n);
     void QueueFan(const VertexIndex* ii, int n);
