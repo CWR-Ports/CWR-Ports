@@ -55,7 +55,7 @@ struct VirtualButtonDef {
 };
 
 VirtualButtonDef g_mobileButtons[] = {
-    {"Fire", 0.08f, 0.33f, 0.09f, VB_FIRE_LOOK, 0, 0},
+    {"Fire", 0.08f, 0.33f, 0.11f, VB_FIRE_LOOK, 0, 0}, // LEFT FIRE
     {"Move", 0.15f, 0.7f, 0.12f, VB_WASD, 0},
     {"ADS", 0.90f, 0.52f, 0.07f, VB_KEY, SDL_SCANCODE_V},
     {"Zoom", 0.73f, 0.50f, 0.07f, VB_ZOOM_LOOK, 0},
